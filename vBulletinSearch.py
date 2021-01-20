@@ -9,13 +9,9 @@ from bs4 import BeautifulSoup
 
 class VBulletinSearch:
 
-    def __init__(self, login_url='', login_data={}):
-        self.__session = None
-        self.__login_url = login_url
-        self.__login_data = login_data
-        self.__session_started = False
+    def __init__(self, session):
+        self.__session = session
         self.__base_url = ''
-        self.__session = None
 
     @property
     def session(self):
@@ -24,17 +20,6 @@ class VBulletinSearch:
     @property
     def base_url(self):
         return self.__base_url
-
-    def do_login(self):
-        self.__session_started = False
-        if not self.__session:
-            self.__session = requests.Session()
-        if not self.__login_url:
-            self.__login_url = self.__base_url + 'login.php'
-        r = self.__session.post(self.__login_url, data=self.__login_data)
-        cookie_bbimloggedin = r.cookies.get('bbimloggedin', default='no')
-        if cookie_bbimloggedin == 'yes':
-            self.__session_started = True
 
     def get_token(self, search_url):
         search_page = self.__session.get(search_url)
@@ -46,19 +31,18 @@ class VBulletinSearch:
         security_token = hidden_token.get('value', default='')
         return security_token
 
-    def start_searching(self, username):
+    def start_searching(self):
+        if not self.__session:
+            return
         # otra alternativa:
         # search.php?do=process&query=...&titleonly=...&forumchoice[]=...&
         # TODO read from config file
         search_url = "some_forum.com/forum/search.php"
         self.get_base_url(search_url)
-        self.do_login()
-        if not self.__session_started:
-            return
         # some_forum.com/forum/search.php?do=process
         security_token = self.get_token(search_url)
         # TODO read from config file
-        search_query = ''
+        # search_query = ''
         # TODO do URL encoding of the search query
         search_query_encoded = ''
         search_params = {
@@ -141,7 +125,7 @@ class VBulletinSearch:
         # <a href="showthread.php?t=8149854"
         #   id="thread_title_8149854">THIS IS THE THREAD TITLE</a>
         regex_id_td = re.compile("td_threadtitle_([0-9]+)")
-        regex_id_link = re.compile("thread_title_([0-9]+)")
+        # regex_id_link = re.compile("thread_title_([0-9]+)")
         all_table_cells = lista_resultados.find_all('td', {'id': regex_id_td})
         links = []
         for cell in all_table_cells:
@@ -167,6 +151,3 @@ class VBulletinSearch:
         self.__base_url = path.scheme + '://' + path.netloc + '/'
         path_split = os.path.split(path.path)
         self.__base_url += path_split[0] + '/'
-
-
-

@@ -1,6 +1,9 @@
+import configparser
 import getopt
+import os
 import sys
 
+from vBulletinLogin import VBulletinLogin
 from vBulletinSearch import VBulletinSearch
 from vBulletinThreadDateParser import find_user_message_timestamp
 from vBulletingUserMessagesByThread import VBulletinUserMessagesByThread
@@ -12,18 +15,16 @@ def main():
     usr = ''
     argv = sys.argv[1:]
     # TODO https://docs.python.org/3/library/configparser.html
-    try:
-        opts, args = getopt.getopt(argv, 'u:p:t:')
-        for (opt, value) in opts:
-            if opt == "-u":
-                username = str(value)
-            elif opt == "-p":
-                pwd = str(value)
-            elif opt == "-t":
-                usr = str(value)
-    except ValueError as err:
-        print(str(err))
-        exit(-1)
+    config = configparser.ConfigParser()
+    config.read(os.path.join('resources', 'config.ini'))
+
+    username = config['VBULLETINLOGIN']['logname']
+    pwd = config['VBULLETINLOGIN']['password']
+
+    usr = config['SEARCHUSER']['username']
+    base_url = config['VBULLETINURL']['base_url']
+
+    operation_mode = config['OPERATIONMODE']['operation']
 
     if not username or not pwd or not usr:
         exit()
@@ -41,15 +42,24 @@ def main():
         'vb_login_password': pwd,
         'cookieuser': '1',
         'logb2': 'Acceder'}
-    parser = VBulletinSearch(login_data=login_data)
-    link_list = parser.start_searching(usr)
-    timestamp = True
-    if timestamp:
-        find_user_message_timestamp(link_list, username)
-    else:
+    session = VBulletinLogin(base_url + 'login.php')
+    if not session:
+        exit()
+
+    if operation_mode == 'SEARCH':
+        parser = VBulletinSearch(session)
+        link_list = parser.start_searching(usr)
         thread_parser = VBulletinUserMessagesByThread(parser.session, parser.base_url)
         thread_parser.find_user_messages(link_list, username)
         thread_parser.create_index_page(link_list)
+    elif operation_mode == 'timestamp':
+        parser = VBulletinSearch(session)
+        link_list = parser.start_searching(usr)
+        find_user_message_timestamp(link_list, username)
+    elif operation_mode == 'SINGLETHREAD':
+        thread_id = config['SINGLETHREAD']['thread_id']
+    else:
+        print('Operation mode: ' + operation_mode + ' unknown')
 
 
 # Lanzamos la función principal
