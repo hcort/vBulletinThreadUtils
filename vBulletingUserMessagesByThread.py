@@ -4,10 +4,10 @@ from vBulletinThreadParser import VBulletinThreadParser
 
 class VBulletinUserMessagesByThread(object):
 
-    def __init__(self):
+    def __init__(self, session, base_url):
         self.__index_file = None
-        self.__base_url = ''
-        self.__session = None
+        self.__base_url = base_url
+        self.__session = session
 
     def find_user_messages(self, links, username):
         num_links = len(links)

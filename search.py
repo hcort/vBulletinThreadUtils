@@ -42,14 +42,15 @@ def main():
         'vb_login_password': pwd,
         'cookieuser': '1',
         'logb2': 'Acceder'}
-    session = VBulletinLogin(base_url + 'login.php')
+    session = VBulletinLogin(base_url + 'login.php', login_data)
     if not session:
         exit()
 
-    if operation_mode == 'SEARCH':
-        parser = VBulletinSearch(session)
-        link_list = parser.start_searching(usr)
-        thread_parser = VBulletinUserMessagesByThread(parser.session, parser.base_url)
+    if operation_mode == 'SEARCHTHREADS':
+        parser = VBulletinSearch(session, base_url)
+        search_query = config['SEARCHTHREADS']['search_words']
+        link_list = parser.start_searching(search_query)
+        thread_parser = VBulletinUserMessagesByThread()
         thread_parser.find_user_messages(link_list, username)
         thread_parser.create_index_page(link_list)
     elif operation_mode == 'timestamp':
@@ -57,7 +58,19 @@ def main():
         link_list = parser.start_searching(usr)
         find_user_message_timestamp(link_list, username)
     elif operation_mode == 'SINGLETHREAD':
-        thread_id = config['SINGLETHREAD']['thread_id']
+        # extraer {'id': '', 'url': '', 'title': '', 'hover': '', 'author': '', 'author_id': ''}
+        thid = config['SINGLETHREAD']['thread_id']
+        this_thread = {
+            'id': thid,
+            'url': base_url + 'showthread.php?t=' + thid,
+            'title': '',
+            'hover': '',
+            'author': '',
+            'author_id': ''
+        }
+        link_list = [this_thread]
+        thread_parser = VBulletinUserMessagesByThread(session, base_url)
+        thread_parser.find_user_messages(link_list, usr)
     else:
         print('Operation mode: ' + operation_mode + ' unknown')
 

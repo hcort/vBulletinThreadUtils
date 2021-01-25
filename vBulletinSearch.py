@@ -9,9 +9,9 @@ from bs4 import BeautifulSoup
 
 class VBulletinSearch:
 
-    def __init__(self, session):
+    def __init__(self, session, base_url):
         self.__session = session
-        self.__base_url = ''
+        self.__base_url = base_url
 
     @property
     def session(self):
@@ -31,20 +31,17 @@ class VBulletinSearch:
         security_token = hidden_token.get('value', default='')
         return security_token
 
-    def start_searching(self):
+    def start_searching(self, search_query):
         if not self.__session:
             return
         # otra alternativa:
         # search.php?do=process&query=...&titleonly=...&forumchoice[]=...&
-        # TODO read from config file
-        search_url = "some_forum.com/forum/search.php"
-        self.get_base_url(search_url)
+        search_url = self.__base_url + 'search.php'
+        # self.get_base_url(search_url)
         # some_forum.com/forum/search.php?do=process
         security_token = self.get_token(search_url)
-        # TODO read from config file
         # search_query = ''
-        # TODO do URL encoding of the search query
-        search_query_encoded = ''
+        search_query_encoded = urllib.parse.quote_plus(search_query)
         search_params = {
             's': '',
             'securitytoken': security_token,
