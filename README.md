@@ -23,8 +23,24 @@ vBulletingThreadDateParser
 Parses a thread an extracts when a given username has posted its messages. It then creates a histogram with
 the amount of messages each hour of each day of the week.
 
-To do:
-- Read some parameters from config file.
-- Operation mode switch.
-- Single thread processing instead of search result processing.
+Config file sections:
+- [VBULLETIN]: the user used to log into vBulletin. 
+Specify 'logname', 'password' and 'base_url' (in the format https://www.some_forum.com/forum/).
+- [SEARCHUSER]: in 'username' we specify the user we will use to filter the threads messages 
+with vBulletinThreadParser
+- [OPERATIONMODE]: specifies what kind of parsing we will use. Each of these operation modes will
+have its own section with the required data.
+- [SINGLETHREAD]: parses only a thread using 'thread_id' (thread URL will be 
+base_url/showthread.php?t=thread_id) and creates a file with the messages of the user specified in
+the SEARCHUSER section.
+- [SEARCHTHREADS]: uses the vBulletin search engine to search thread with 'search_words' in its title.
+You can also specify other parameters as 'replylimit' or 'forumchoice[]' to refine your results.
 
+
+To do:
+- Read from config file (done).
+- Operation mode switch (done).
+- Single thread processing instead of search result processing (done).
+- Save external images.
+- Refine search using config file parameters.
+- Read HTML header instead of using local files.

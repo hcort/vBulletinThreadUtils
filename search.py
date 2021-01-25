@@ -18,11 +18,11 @@ def main():
     config = configparser.ConfigParser()
     config.read(os.path.join('resources', 'config.ini'))
 
-    username = config['VBULLETINLOGIN']['logname']
-    pwd = config['VBULLETINLOGIN']['password']
+    username = config['VBULLETIN']['logname']
+    pwd = config['VBULLETIN']['password']
 
     usr = config['SEARCHUSER']['username']
-    base_url = config['VBULLETINURL']['base_url']
+    base_url = config['VBULLETIN']['base_url']
 
     operation_mode = config['OPERATIONMODE']['operation']
 
