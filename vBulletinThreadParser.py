@@ -4,6 +4,33 @@ import re
 import requests
 from bs4 import BeautifulSoup
 
+from vBulletinSearch import find_next
+
+
+def get_page_number_from_url(next_url):
+    regex_id = re.compile("page=([0-9]+)")
+    m = regex_id.search(next_url)
+    if m:
+        return m.group(1)
+    return -1
+
+
+def parse_post_author(post_table, id_post, base_url):
+    # <a class="bigusername" href="member.php?u=012345">user_name</a>
+    try:
+        post_menu = post_table.find('div', {'id': 'postmenu_' + id_post})
+        user_link = post_menu.find('a', class_='bigusername')
+        if user_link:
+            post_author = user_link.text
+            post_author_profile = base_url + user_link.get('href')
+        else:
+            post_author = 'Invitado'
+            post_author_profile = base_url + 'member.php?u=' + post_menu.text
+    except Exception:
+        post_author = 'Invitado'
+        post_author_profile = ''
+    return [post_author, post_author_profile]
+
 
 class VBulletinThreadParser:
 
@@ -35,9 +62,9 @@ class VBulletinThreadParser:
         for line in open(os.path.join('resources', "page_header.txt"), "r"):
             if line.startswith('<meta name="description"'):
                 self.__thread_file.write(
-                    '<meta name=\"description\" content=\" {}\" />'.format(self.__thread_name))
-            elif line.startswith('<title>' + self.__thread_name + '</title>'):
-                self.__thread_file.write('<title>')
+                    '<meta name=\"description\" content=\"{}\" />'.format(self.__thread_name))
+            elif line.startswith('<title>'):
+                self.__thread_file.write('<title>' + self.__thread_name + '</title>')
             else:
                 self.__thread_file.write(line)
 
@@ -45,22 +72,6 @@ class VBulletinThreadParser:
         self.__thread_file.write('\n</body></html>')
         self.__thread_file.close()
         self.__thread_file = None
-
-    def find_next(self, soup):
-        # Funciona exactamente igual que el de VBulletinSearch
-        pagenav_div = soup.find_all("div", class_="pagenav")
-        for div in pagenav_div:
-            lista_paginas = div.findChildren("td", class_="alt1", recursive=True)
-            for pagina in lista_paginas:
-                pag_sig = pagina.find("a", {"rel": "next"})
-                if pag_sig:
-                    next_url = pag_sig.get('href')
-                    regex_id = re.compile("page=([0-9]+)")
-                    m = regex_id.search(next_url)
-                    if m:
-                        self.__page_number = m.group(1)
-                    return next_url
-        return None
 
     def parse_thread(self, session, thread_url):
         current_url = thread_url
@@ -74,8 +85,9 @@ class VBulletinThreadParser:
             soup = BeautifulSoup(current_page.text, features="html.parser")
             author_matches += self.parse_thread_posts(soup)
             # busco el enlace a la página siguiente
-            next_url = self.find_next(soup)
+            next_url = find_next(soup)
             if next_url:
+                self.__page_number = get_page_number_from_url(next_url)
                 next_url = self.__base_url + next_url
                 if next_url != current_url:
                     current_url = next_url
@@ -93,21 +105,6 @@ class VBulletinThreadParser:
             self.__current_post_date = thead[0].text.strip()
             self.__current_post_number = thead[1].text.strip()
             # print('Post #' + num_post + '\Fecha: ' + fecha)
-
-    def parse_post_author(self, post_table, id_post):
-        # <a class="bigusername" href="member.php?u=012345">user_name</a>
-        try:
-            post_menu = post_table.find('div', {'id': 'postmenu_' + id_post})
-            user_link = post_menu.find('a', class_='bigusername')
-            if user_link:
-                self.__current_post_author = user_link.text
-                self.__current_post_author_profile = self.__base_url + user_link.get('href')
-            else:
-                self.__current_post_author = 'Invitado'
-                self.__current_post_author_profile = self.__base_url + 'member.php?u=' + post_menu.text
-        except Exception as err:
-            self.__current_post_author = 'Invitado'
-            self.__current_post_author_profile = ''
 
     def format_post_url(self, id_post):
         self.__current_post_url = '{}showthread.php?t={}&page={}#post{}'.format(self.__base_url,
@@ -149,8 +146,10 @@ class VBulletinThreadParser:
                 post_table = post.find('table', {'id': 'post' + id_post})
                 if not post_table:
                     return
-                self.parse_post_author(post_table, id_post)
-                if self.__current_post_author == self.__username:
+                [self.__current_post_author, self.__current_post_author_profile] = parse_post_author(post_table,
+                                                                                                     id_post,
+                                                                                                     self.__base_url)
+                if (not self.__username) or (self.__current_post_author == self.__username):
                     self.format_post_url(id_post)
                     self.parse_post_date_number(post_table)
                     content_div = post_table.find('td', {'id': 'td_post_' + id_post})
@@ -243,4 +242,3 @@ class VBulletinThreadParser:
     #                 middle_div.insert(inner_div)
     #                 outer_div.insert(middle_div)
     #                 embed.parent.insert(outer_div)
-

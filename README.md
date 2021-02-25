@@ -26,7 +26,7 @@ the amount of messages each hour of each day of the week.
 Config file sections:
 - [VBULLETIN]: the user used to log into vBulletin. 
 Specify 'logname', 'password' and 'base_url' (in the format https://www.some_forum.com/forum/).
-- [SEARCHUSER]: in 'username' we specify the user we will use to filter the threads messages 
+- [FILTERUSER]: in 'username' we specify the user we will use to filter the threads messages 
 with vBulletinThreadParser
 - [OPERATIONMODE]: specifies what kind of parsing we will use. Each of these operation modes will
 have its own section with the required data.
@@ -34,7 +34,12 @@ have its own section with the required data.
 base_url/showthread.php?t=thread_id) and creates a file with the messages of the user specified in
 the SEARCHUSER section.
 - [SEARCHTHREADS]: uses the vBulletin search engine to search thread with 'search_words' in its title.
-You can also specify other parameters as 'replylimit' or 'forumchoice[]' to refine your results.
+You can also specify other parameters:
+  - search_user: Searches only for threads started by given user.
+  - 'replylimit' to filter threads with more or less posts than a given number.
+  - 'forumchoice[]' to refine your results by subforum.
+  - Strict search: vBulletin search engine finds threads where any of the keywords provided are in the title. 
+use this parameter to filter search results.
 
 
 To do:
@@ -44,3 +49,8 @@ To do:
 - Save external images.
 - Refine search using config file parameters.
 - Read HTML header instead of using local files.
+- Search by user and filter by user using separate values (done).
+- Search user as post author and not only thread author.  
+- Strict search (done).  
+- If filter user is empty we save the whole thread (done).
+- Split parsing and writing to file.
