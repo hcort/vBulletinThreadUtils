@@ -1,5 +1,6 @@
 import os
 import re
+from urllib.parse import urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -46,6 +47,7 @@ class VBulletinThreadParser:
         self.__current_post_author_profile = ''
         self.__thread_name = thread_name
         self.__username = username
+        self.__thread_filename = ''
         self.__thread_file = None
 
     def open_file(self, thread_url):
@@ -53,12 +55,12 @@ class VBulletinThreadParser:
         m = regex_id.search(thread_url)
         if m:
             self.__thread_id = m.group(1)
-        filename = os.path.join('output', self.__thread_id + '.html')
-        if os.path.exists(filename):
-            os.remove(filename)
+        self.__thread_filename = os.path.join('output', self.__thread_id + '.html')
+        if os.path.exists(self.__thread_filename):
+            os.remove(self.__thread_filename)
         # 'iso-8859-1', 'cp1252'
         if not self.__thread_file:
-            self.__thread_file = open(filename, "a+", encoding='utf-8')
+            self.__thread_file = open(self.__thread_filename, "a+", encoding='utf-8')
         for line in open(os.path.join('resources', "page_header.txt"), "r"):
             if line.startswith('<meta name="description"'):
                 self.__thread_file.write(
@@ -77,13 +79,13 @@ class VBulletinThreadParser:
         current_url = thread_url
         self.__page_number = '1'
         author_matches = 0
-        self.open_file(thread_url)
+        all_post_table_list = []
         while current_url:
             current_page = session.get(current_url)
             if current_page.status_code != requests.codes.ok:
                 break
             soup = BeautifulSoup(current_page.text, features="html.parser")
-            author_matches += self.parse_thread_posts(soup)
+            all_post_table_list += self.parse_thread_posts(soup)
             # busco el enlace a la página siguiente
             next_url = find_next(soup)
             if next_url:
@@ -95,7 +97,8 @@ class VBulletinThreadParser:
                     current_url = None
             else:
                 current_url = None
-        self.close_file()
+        author_matches = len(all_post_table_list)
+        self.write_output_file(thread_url, all_post_table_list)
         return author_matches
 
     def parse_post_date_number(self, post_table):
@@ -138,6 +141,7 @@ class VBulletinThreadParser:
         author_matches = 0
         regex_id = re.compile("edit([0-9]{9})")
         all_posts = soup.find_all('div', id=regex_id, recursive=True)
+        post_table_list = []
         for post in all_posts:
             self.init_post()
             m = regex_id.search(post.get('id'))
@@ -156,20 +160,8 @@ class VBulletinThreadParser:
                     if not content_div:
                         return
                     self.fix_local_links(post_table)
-                    # self.fix_youtube_links(post_table)
-                    table_str = '<table '
-                    for k, v in post_table.attrs.items():
-                        if type(v) is list:
-                            table_str += k + '=\"' + v[0] + '\" '
-                        else:
-                            table_str += k + '=\"' + v + '\" '
-                    table_str += '>\n'
-                    for child in post_table.children:
-                        table_str += str(child)
-                    table_str += '</table>'
-                    if self.write_str_to_file(table_str):
-                        author_matches += 1
-        return author_matches
+                    post_table_list.append(post_table)
+        return post_table_list
 
     def fix_local_links(self, post_table):
         """
@@ -192,53 +184,25 @@ class VBulletinThreadParser:
             link['href'] = self.__base_url + link['href']
         for link in all_thread_links:
             link['href'] = self.__base_url + link['href']
-        # TODO replace some_forum.com using base_url from a config file
-        regex_local_imgs = re.compile("//st\.some_forum\.com/forum/customavatars")
+        forum_url_parts = urlparse(self.__base_url)
+        img_regex = forum_url_parts.netloc.replace('www', '//st') + forum_url_parts.path + '[customavatars|images]'
+        regex_local_imgs = re.compile(img_regex)
         all_local_imgs = post_table.find_all('img', {'src': regex_local_imgs}, recursive=True)
         for img in all_local_imgs:
             img['src'] = 'https:' + img['src']
 
-    # def fix_youtube_links(self, post_table):
-    #   """
-    #       Elimino esta función porque no necesito insertar a mano este reproductor de vídeos,
-    #       basta con corregir el javascript (en page_header.txt) que lo crea
-    #   """
-    #     """
-    #         <div id="24806" align="center">
-    #             <div class="video-youtube" align="center">
-    #                 <div class="video-container">
-    #                     <iframe title="YouTube video player"
-    #                         class="youtube-player"
-    #                         type="text/html"
-    #                         src="//www.youtube.com/embed/sGaX5C7Pm6E"
-    #                         allowfullscreen="" width="640" height="390" frameborder="0"/>
-    #                 </div>
-    #             </div>
-    #         </div>
-    #     """
-    #     javascript_embed_code = post_table.find_all('script', {'language': 'javascript'}, recursive=False)
-    #     if not javascript_embed_code:
-    #         return
-    #     for embed in javascript_embed_code:
-    #         for content in embed.contents:
-    #             # parse regex: # <!-- # verVideo('6MVGhGdpdDI','4561'); # -->
-    #             regex_id = re.compile("verVideo\(\'([^\"&?\\\/]{11}),'([0-9]+)'")
-    #             m = regex_id.search(content)
-    #             if m:
-    #                 id_video = m.group(1)
-    #                 id_post = m.group(2)
-    #                 outer_div = self.new_soup.new_tag('div', id=id_post, attrs={'align': 'center'})
-    #                 middle_div = self.new_soup.new_tag('div', attrs={'align': 'center', 'class': 'video-youtube'})
-    #                 inner_div = self.new_soup.new_tag('div', attrs={'class': 'video-container'})
-    #                 iframe = self.new_soup.new_tag('iframe', attrs={
-    #                     'title': 'YouTube video player',
-    #                     'class': 'youtube-player',
-    #                     'type': 'text/html',
-    #                     'src': 'https://www.youtube.com/embed/' + id_video,
-    #                     'allowfullscreen': '',
-    #                     'width': '640', 'height': '390', 'frameborder': '0'
-    #                 })
-    #                 inner_div.insert(iframe)
-    #                 middle_div.insert(inner_div)
-    #                 outer_div.insert(middle_div)
-    #                 embed.parent.insert(outer_div)
+    def write_output_file(self, thread_url, all_post_table_list):
+        self.open_file(thread_url)
+        for post_table in all_post_table_list:
+            table_str = '<table '
+            for k, v in post_table.attrs.items():
+                if type(v) is list:
+                    table_str += k + '=\"' + v[0] + '\" '
+                else:
+                    table_str += k + '=\"' + v + '\" '
+            table_str += '>\n'
+            for child in post_table.children:
+                table_str += str(child)
+            table_str += '</table>'
+            self.write_str_to_file(table_str)
+        self.close_file()

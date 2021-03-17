@@ -1,7 +1,5 @@
 import configparser
-import getopt
 import os
-import sys
 
 from vBulletinLogin import VBulletinLogin
 from vBulletinSearch import VBulletinSearch
@@ -77,6 +75,5 @@ def main():
         print('Operation mode: ' + operation_mode + ' unknown')
 
 
-# Lanzamos la función principal
 if __name__ == "__main__":
     main()
