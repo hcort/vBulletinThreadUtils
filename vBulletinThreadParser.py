@@ -1,6 +1,7 @@
 import os
 import re
 from urllib.parse import urlparse
+from slugify import slugify
 
 import requests
 from bs4 import BeautifulSoup
@@ -33,9 +34,41 @@ def parse_post_author(post_table, id_post, base_url):
     return [post_author, post_author_profile]
 
 
+def save_image(src_txt, output_dir='', server_root=''):
+    img_filename = slugify(src_txt, max_length=250)
+    image_path = os.path.join(output_dir, 'imgs', img_filename)
+    # server_root is used to build the new img src attribute so a local
+    # http server can display them properly
+    if server_root:
+        rel_path = os.path.relpath(output_dir, server_root)
+        image_src_new = os.path.join('\\', rel_path, 'imgs', img_filename)
+    else:
+        image_src_new = image_path
+    if not os.path.exists(image_path):
+        with open(image_path, 'wb') as handle:
+            try:
+                response = requests.get(src_txt, stream=True)
+                if not response.ok:
+                    print('Error getting image: ' + src_txt)
+                for block in response.iter_content(1024):
+                    if not block:
+                        break
+                    handle.write(block)
+                return image_src_new
+            except ConnectionError as err:
+                print('Error getting image: ' + src_txt)
+                print(err)
+            except Exception as err:
+                print('Error getting image: ' + src_txt)
+                print(err)
+    else:
+        return image_src_new
+    return src_txt
+
+
 class VBulletinThreadParser:
 
-    def __init__(self, base_url, thread_name, username):
+    def __init__(self, base_url, thread_name, username, output_dir=''):
         self.__start_url = ''
         self.__page_number = ''
         self.__base_url = base_url
@@ -50,17 +83,18 @@ class VBulletinThreadParser:
         self.__thread_filename = ''
         self.__thread_file = None
 
-    def open_file(self, thread_url):
+    def open_file(self, thread_url, output_dir=''):
         regex_id = re.compile("t=([0-9]+)")
         m = regex_id.search(thread_url)
         if m:
             self.__thread_id = m.group(1)
-        self.__thread_filename = os.path.join('output', self.__thread_id + '.html')
+        self.__thread_filename = os.path.join(output_dir, self.__thread_id + '.html')
         if os.path.exists(self.__thread_filename):
             os.remove(self.__thread_filename)
         # 'iso-8859-1', 'cp1252'
         if not self.__thread_file:
-            self.__thread_file = open(self.__thread_filename, "a+", encoding='utf-8')
+            # self.__thread_file = open(self.__thread_filename, "a+", encoding='utf-8')
+            self.__thread_file = open(self.__thread_filename, "a+", encoding='latin-1')
         for line in open(os.path.join('resources', "page_header.txt"), "r"):
             if line.startswith('<meta name="description"'):
                 self.__thread_file.write(
@@ -75,7 +109,7 @@ class VBulletinThreadParser:
         self.__thread_file.close()
         self.__thread_file = None
 
-    def parse_thread(self, session, thread_url):
+    def parse_thread(self, session, thread_url, save_images=False, output_dir='', server_root=''):
         current_url = thread_url
         self.__page_number = '1'
         author_matches = 0
@@ -98,7 +132,8 @@ class VBulletinThreadParser:
             else:
                 current_url = None
         author_matches = len(all_post_table_list)
-        self.write_output_file(thread_url, all_post_table_list)
+        self.write_output_file(thread_url, all_post_table_list, save_images=save_images,
+                               output_dir=output_dir, server_root=server_root)
         return author_matches
 
     def parse_post_date_number(self, post_table):
@@ -191,8 +226,8 @@ class VBulletinThreadParser:
         for img in all_local_imgs:
             img['src'] = 'https:' + img['src']
 
-    def write_output_file(self, thread_url, all_post_table_list):
-        self.open_file(thread_url)
+    def write_output_file(self, thread_url, all_post_table_list, save_images=False, output_dir='', server_root=''):
+        self.open_file(thread_url, output_dir=output_dir)
         for post_table in all_post_table_list:
             table_str = '<table '
             for k, v in post_table.attrs.items():
@@ -202,6 +237,14 @@ class VBulletinThreadParser:
                     table_str += k + '=\"' + v + '\" '
             table_str += '>\n'
             for child in post_table.children:
+                if save_images:
+                    all_imgs = post_table.find_all('img', recursive=True)
+                    for img in all_imgs:
+                        src_txt = img['src']
+                        if not img.get('src_old', None):
+                            # some nodes are parsed more than once (!) hack to detect this
+                            img['src'] = save_image(src_txt, output_dir, server_root=server_root)
+                            img['src_old'] = src_txt
                 table_str += str(child)
             table_str += '</table>'
             self.write_str_to_file(table_str)

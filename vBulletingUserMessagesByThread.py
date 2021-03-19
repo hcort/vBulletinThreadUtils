@@ -9,13 +9,15 @@ class VBulletinUserMessagesByThread(object):
         self.__base_url = base_url
         self.__session = session
 
-    def find_user_messages(self, links, username):
+    def find_user_messages(self, links, username, save_images=False, output_dir='', server_root=''):
         num_links = len(links)
         for idx, link in enumerate(links):
             print('[' + str(idx) + '/' + str(num_links) + '] - ' + str(link))
             thread_name = link['title']
             thread_parser = VBulletinThreadParser(self.__base_url, thread_name, username)
-            author_matches = thread_parser.parse_thread(self.__session, link['url'])
+            author_matches = thread_parser.parse_thread(self.__session, link['url'],
+                                                        save_images=save_images,
+                                                        output_dir=output_dir, server_root=server_root)
             link['matches'] = author_matches
 
     def open_index_file(self):

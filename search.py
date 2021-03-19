@@ -46,11 +46,16 @@ def main():
     search_query = config['SEARCHTHREADS'].get('search_words', '')
     strict_search = config['SEARCHTHREADS'].get('strict_search', False)
 
+    save_images = (config['VBULLETIN'].get('save_images', '') == 'True')
+    output_dir = config['VBULLETIN'].get('output_dir', '')
+    server_root = config['VBULLETIN'].get('http_server_root', output_dir)
+
     if operation_mode == 'SEARCHTHREADS':
         parser = VBulletinSearch(session, base_url)
         link_list = parser.start_searching(search_query, search_user, strict_search)
         thread_parser = VBulletinUserMessagesByThread()
-        thread_parser.find_user_messages(link_list, filter_usr)
+        thread_parser.find_user_messages(link_list, filter_usr,
+                                         save_images=save_images, output_dir=output_dir, server_root=server_root)
         thread_parser.create_index_page(link_list)
     elif operation_mode == 'TIMESTAMP':
         parser = VBulletinSearch(session)
@@ -70,7 +75,8 @@ def main():
         # FIXME get thread title
         link_list = [this_thread]
         thread_parser = VBulletinUserMessagesByThread(session, base_url)
-        thread_parser.find_user_messages(link_list, filter_usr)
+        thread_parser.find_user_messages(link_list, filter_usr,
+                                         save_images=save_images, output_dir=output_dir, server_root=server_root)
     else:
         print('Operation mode: ' + operation_mode + ' unknown')
 
