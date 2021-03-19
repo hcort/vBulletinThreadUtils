@@ -26,6 +26,12 @@ the amount of messages each hour of each day of the week.
 Config file sections:
 - [VBULLETIN]: the user used to log into vBulletin. 
 Specify 'logname', 'password' and 'base_url' (in the format https://www.some_forum.com/forum/).
+Also some parameters to config how to store the threads:
+  - output_dir where to store everythin
+  - save_images download the images found in the thread to local storage
+  - http_server_root specifies the root of a local HTTP server so proper image src attributes 
+  can be generated in the HTML output.
+
 - [FILTERUSER]: in 'username' we specify the user we will use to filter the threads messages 
 with vBulletinThreadParser
 - [OPERATIONMODE]: specifies what kind of parsing we will use. Each of these operation modes will
@@ -43,14 +49,14 @@ use this parameter to filter search results.
 
 
 To do:
+- Refine search using config file parameters.
+- Read HTML header instead of using local files.
+- Search user as post author and not only thread author.  
 - Read from config file (done).
 - Operation mode switch (done).
 - Single thread processing instead of search result processing (done).
-- Save external images.
-- Refine search using config file parameters.
-- Read HTML header instead of using local files.
+- Save external images (done).
 - Search by user and filter by user using separate values (done).
-- Search user as post author and not only thread author.  
 - Strict search (done).  
 - If filter user is empty we save the whole thread (done).
-- Split parsing and writing to file.
+- Split parsing and writing to file (done).
