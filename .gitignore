@@ -1,3 +1,6 @@
 /output/*
 /resources/*
 /venv/
+/venv36/
+/.idea/
+geckodriver*

@@ -31,12 +31,13 @@ def main():
         'url': '',
         'vb_login_md5password': '',
         'vb_login_md5password_utf': '',
-        's': '',
+        's': 'f6a6b3226a64c319a11efd886f798259',
         'securitytoken': 'guest',
         'vb_login_username': username,
         'vb_login_password': pwd,
         'cookieuser': '1',
         'logb2': 'Acceder'}
+    # login_url = 'https://www.forocoches.com/foro/misc.php?do=page&template=ident'
     session = VBulletinLogin(base_url + 'login.php', login_data)
     if not session:
         exit()
