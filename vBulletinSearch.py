@@ -131,7 +131,7 @@ def start_searching():
     # search.php?do=process&query=...&titleonly=...&forumchoice[]=...&
     search_url = base_url + 'search.php'
     # some_forum.com/forum/search.php?do=process
-    search_params =  build_search_params(search_url)
+    search_params = build_search_params(search_url, search_query)
     # TODO format this properly
     search_url_process = search_url + '?do=process'
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
