@@ -6,6 +6,8 @@ import urllib.parse
 import requests
 from bs4 import BeautifulSoup
 
+from vBulletinSession import vbulletin_session
+
 
 def find_next(soup):
     """
@@ -81,20 +83,17 @@ def get_links(base_url, soup, search_query='', strict_search=False):
 
 class VBulletinSearch:
 
-    def __init__(self, session, base_url):
-        self.__session = session
+    def __init__(self, base_url):
         self.__base_url = base_url
-
-    @property
-    def session(self):
-        return self.__session
 
     @property
     def base_url(self):
         return self.__base_url
 
     def get_token(self, search_url):
-        search_page = self.__session.get(search_url)
+        if not vbulletin_session.session:
+            return None
+        search_page = vbulletin_session.session.get(search_url)
         if search_page.status_code != requests.codes.ok:
             return
         soup = BeautifulSoup(search_page.text, features="html.parser")
@@ -104,12 +103,11 @@ class VBulletinSearch:
         return security_token
 
     def start_searching(self, search_query='', thread_author='', strict_search=False):
-        if not self.__session:
-            return
+        if not vbulletin_session.session:
+            return None
         # otra alternativa:
         # search.php?do=process&query=...&titleonly=...&forumchoice[]=...&
         search_url = self.__base_url + 'search.php'
-        # self.get_base_url(search_url)
         # some_forum.com/forum/search.php?do=process
         security_token = self.get_token(search_url)
         # search_query = ''
@@ -138,22 +136,16 @@ class VBulletinSearch:
         # TODO format this properly
         search_url_process = search_url + '?do=process'
         headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-        start_search = self.__session.post(search_url_process, data=search_params, headers=headers)
+        start_search = vbulletin_session.session.post(search_url_process, data=search_params, headers=headers)
         search_soup = BeautifulSoup(start_search.text, features="html.parser")
         links = get_links(base_url=self.__base_url, soup=search_soup,
                           search_query=search_query, strict_search=strict_search)
         next_results_page = find_next(search_soup)
         while next_results_page:
             next_url = self.__base_url + next_results_page
-            next_search = self.__session.get(next_url)
+            next_search = vbulletin_session.session.get(next_url)
             search_soup = BeautifulSoup(next_search.text, features="html.parser")
             links += get_links(base_url=self.__base_url, soup=search_soup,
                                search_query=search_query, strict_search=strict_search)
             next_results_page = find_next(search_soup)
         return links
-
-    def get_base_url(self, search_url):
-        path = urllib.parse.urlparse(search_url)
-        self.__base_url = path.scheme + '://' + path.netloc + '/'
-        path_split = os.path.split(path.path)
-        self.__base_url += path_split[0] + '/'

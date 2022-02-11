@@ -4,10 +4,9 @@ from vBulletinThreadParser import VBulletinThreadParser
 
 class VBulletinUserMessagesByThread(object):
 
-    def __init__(self, session, base_url):
+    def __init__(self, base_url):
         self.__index_file = None
         self.__base_url = base_url
-        self.__session = session
 
     def find_user_messages(self, links, username, save_images=False, output_dir='', server_root=''):
         num_links = len(links)
@@ -15,7 +14,7 @@ class VBulletinUserMessagesByThread(object):
             print('[' + str(idx) + '/' + str(num_links) + '] - ' + str(link))
             thread_name = link['title']
             thread_parser = VBulletinThreadParser(self.__base_url, thread_name, username)
-            author_matches = thread_parser.parse_thread(self.__session, link['url'],
+            author_matches = thread_parser.parse_thread(link['url'],
                                                         save_images=save_images,
                                                         output_dir=output_dir, server_root=server_root)
             link['matches'] = author_matches

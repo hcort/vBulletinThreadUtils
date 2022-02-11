@@ -4,6 +4,8 @@ import re
 import requests
 from bs4 import BeautifulSoup
 
+from vBulletinSession import vbulletin_session
+
 
 def dia_to_int(dia):
     switcher = {
@@ -77,11 +79,13 @@ class VBulletinThreadDateParser(object):
                     return next_url
         return None
 
-    def parse_thread(self, session, thread_url):
+    def parse_thread(self, thread_url):
+        if not vbulletin_session.session:
+            return None
         current_url = thread_url
         self.__page_number = '1'
         while current_url:
-            current_page = session.get(current_url)
+            current_page = vbulletin_session.session.get(current_url)
             if current_page.status_code != requests.codes.ok:
                 break
             soup = BeautifulSoup(current_page.text, features="html.parser")
@@ -203,7 +207,7 @@ def find_user_message_timestamp(self, links, username):
         print('[' + str(idx) + '/' + str(num_links) + '] - ' + str(link))
         thread_name = link['title']
         thread_parser = VBulletinThreadDateParser(self.__base_url, thread_name, username)
-        resultados = thread_parser.parse_thread(self.__session, link['url'])
+        resultados = thread_parser.parse_thread(link['url'])
         # añadir resultados locales a horario global
         for idx_dia, dia in enumerate(resultados):
             for idx_hora, hora in enumerate(dia):

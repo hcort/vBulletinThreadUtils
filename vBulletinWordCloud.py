@@ -3,6 +3,8 @@ import re
 import requests
 from bs4 import BeautifulSoup
 
+from vBulletinSession import vbulletin_session
+
 
 def remove_quotes(msg):
     citas = msg.find_all('div', text=re.compile('Cita'))
@@ -61,11 +63,13 @@ class VBulletinThreadWordCloudParser(object):
                     return next_url
         return None
 
-    def parse_thread(self, session, thread_url):
+    def parse_thread(self, thread_url):
+        if not vbulletin_session.session:
+            return {}
         current_url = thread_url
         self.__page_number = '1'
         while current_url:
-            current_page = session.get(current_url)
+            current_page = vbulletin_session.session.get(current_url)
             if current_page.status_code != requests.codes.ok:
                 break
             soup = BeautifulSoup(current_page.text, features="html.parser")
@@ -133,23 +137,24 @@ class VBulletinThreadWordCloudParser(object):
 
     def parse_message(self, post_table, id_post):
         self.parse_post_author(post_table, id_post)
-        if self.__current_post_author == self.__username:
-            # no contar palabras en quotes
-            msg = post_table.find('td', {'id': 'td_post_' + id_post})
-            remove_quotes(msg)
-            for linea in msg.contents:
-                if linea and (isinstance(linea, str)) and (not linea.startswith('<')) and (len(linea) > 1):
-                    # print(linea)
-                    linea_limpia = linea.lower().strip()
-                    palabras = linea_limpia.split()
-                    for palabra in palabras:
-                        # FIXME cambiar por expresiones regulares
-                        palabra_limpia = "".join(filter(lambda char: char not in "“”«»#$%&()=^[]*+{}¿?.,;:¡!<>/\\\"", palabra))
-                        if check_word(palabra_limpia):
-                            self.__resultados[palabra_limpia] = self.__resultados.get(palabra_limpia, 0) + 1
+        if self.__current_post_author != self.__username:
+            return
+        # no contar palabras en quotes
+        msg = post_table.find('td', {'id': 'td_post_' + id_post})
+        remove_quotes(msg)
+        for linea in msg.contents:
+            if linea and (isinstance(linea, str)) and (not linea.startswith('<')) and (len(linea) > 1):
+                # print(linea)
+                linea_limpia = linea.lower().strip()
+                palabras = linea_limpia.split()
+                for palabra in palabras:
+                    # FIXME cambiar por expresiones regulares
+                    palabra_limpia = "".join(filter(lambda char: char not in "“”«»#$%&()=^[]*+{}¿?.,;:¡!<>/\\\"", palabra))
+                    if check_word(palabra_limpia):
+                        self.__resultados[palabra_limpia] = self.__resultados.get(palabra_limpia, 0) + 1
 
 
-def find_user_message_wordcloud(links, username, base_url, session):
+def find_user_message_wordcloud(links, username, base_url):
     """
         Given a list of threads and a username I parse each thread and build a dictionary with the
         number of times a word is detected in that user messages
@@ -159,7 +164,7 @@ def find_user_message_wordcloud(links, username, base_url, session):
     for idx, link in enumerate(links):
         print('[' + str(idx) + '/' + str(num_links) + '] - ' + str(link))
         thread_name = link['title']
-        thread_parser.parse_thread(session, link['url'])
+        thread_parser.parse_thread(link['url'])
     filtro_pasa_baja = []
     for palabra in thread_parser.resultados:
         if thread_parser.resultados[palabra] < 2:

@@ -7,6 +7,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from vBulletinSearch import find_next
+from vBulletinSession import vbulletin_session
 
 
 def get_page_number_from_url(next_url):
@@ -109,13 +110,15 @@ class VBulletinThreadParser:
         self.__thread_file.close()
         self.__thread_file = None
 
-    def parse_thread(self, session, thread_url, save_images=False, output_dir='', server_root=''):
+    def parse_thread(self, thread_url, save_images=False, output_dir='', server_root=''):
+        if not vbulletin_session.session:
+            return -1
         current_url = thread_url
         self.__page_number = '1'
         author_matches = 0
         all_post_table_list = []
         while current_url:
-            current_page = session.get(current_url)
+            current_page = vbulletin_session.session.get(current_url)
             if current_page.status_code != requests.codes.ok:
                 break
             soup = BeautifulSoup(current_page.text, features="html.parser")
