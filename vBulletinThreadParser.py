@@ -6,8 +6,19 @@ from slugify import slugify
 import requests
 from bs4 import BeautifulSoup
 
+from vBulletinFileUtils import save_image, open_thread_file, write_str_to_thread_file, close_thread_file
 from vBulletinSearch import find_next
 from vBulletinSession import vbulletin_session
+
+
+def find_user_messages_in_thread_list(links, username):
+    num_links = len(links)
+    for idx, link in enumerate(links):
+        print('[' + str(idx) + '/' + str(num_links) + '] - ' + str(link))
+        thread_name = link['title']
+        thread_parser = VBulletinThreadParser(thread_name, username)
+        author_matches = thread_parser.parse_thread(link['url'])
+        link['matches'] = author_matches
 
 
 def get_page_number_from_url(next_url):
@@ -35,44 +46,40 @@ def parse_post_author(post_table, id_post, base_url):
     return [post_author, post_author_profile]
 
 
-def save_image(src_txt, output_dir='', server_root=''):
-    img_filename = slugify(src_txt, max_length=250)
-    image_path = os.path.join(output_dir, 'imgs', img_filename)
-    # server_root is used to build the new img src attribute so a local
-    # http server can display them properly
-    if server_root:
-        rel_path = os.path.relpath(output_dir, server_root)
-        image_src_new = os.path.join('\\', rel_path, 'imgs', img_filename)
-    else:
-        image_src_new = image_path
-    if not os.path.exists(image_path):
-        with open(image_path, 'wb') as handle:
-            try:
-                response = requests.get(src_txt, stream=True)
-                if not response.ok:
-                    print('Error getting image: ' + src_txt)
-                for block in response.iter_content(1024):
-                    if not block:
-                        break
-                    handle.write(block)
-                return image_src_new
-            except ConnectionError as err:
-                print('Error getting image: ' + src_txt)
-                print(err)
-            except Exception as err:
-                print('Error getting image: ' + src_txt)
-                print(err)
-    else:
-        return image_src_new
-    return src_txt
+def fix_local_links(post_table):
+    """
+        Links locales:
+        - citas de otros mensajes:
+            <a href="showthread.php?t=...&page=..#post..."  ...> </a>
+        - número de mensaje en el hilo:
+            <a href="showthread.php?p=...#post..." ...></a>
+        - enlace al perfil del usuario
+            <a class="bigusername" href="member.php?u=...">...</a>
+        Imágenes
+            <img id="fcterremoto" class="avatar" src="//st.some_forum.com/forum/customavatars/....gif"
+                alt="Avatar de ..." title="Avatar de ..." width="120" height="120" border="0">
+    """
+    regex_member = re.compile("member\.php\?u=([0-9]+)")
+    regex_thread = re.compile("showthread\.php\?[pt]=([0-9]+)")
+    all_member_links = post_table.find_all('a', {'href': regex_member}, recursive=True)
+    all_thread_links = post_table.find_all('a', {'href': regex_thread}, recursive=True)
+    for link in all_member_links:
+        link['href'] = vbulletin_session.config['VBULLETIN']['base_url'] + link['href']
+    for link in all_thread_links:
+        link['href'] = vbulletin_session.config['VBULLETIN']['base_url'] + link['href']
+    forum_url_parts = urlparse(vbulletin_session.config['VBULLETIN']['base_url'])
+    img_regex = forum_url_parts.netloc.replace('www', '//st') + forum_url_parts.path + '[customavatars|images]'
+    regex_local_imgs = re.compile(img_regex)
+    all_local_imgs = post_table.find_all('img', {'src': regex_local_imgs}, recursive=True)
+    for img in all_local_imgs:
+        img['src'] = 'https:' + img['src']
 
 
 class VBulletinThreadParser:
 
-    def __init__(self, base_url, thread_name, username, output_dir=''):
+    def __init__(self, thread_name, username):
         self.__start_url = ''
         self.__page_number = ''
-        self.__base_url = base_url
         self.__thread_id = ''
         self.__current_post_url = ''
         self.__current_post_number = ''
@@ -81,34 +88,6 @@ class VBulletinThreadParser:
         self.__current_post_author_profile = ''
         self.__thread_name = thread_name
         self.__username = username
-        self.__thread_filename = ''
-        self.__thread_file = None
-
-    def open_file(self, thread_url, output_dir=''):
-        regex_id = re.compile("t=([0-9]+)")
-        m = regex_id.search(thread_url)
-        if m:
-            self.__thread_id = m.group(1)
-        self.__thread_filename = os.path.join(output_dir, self.__thread_id + '.html')
-        if os.path.exists(self.__thread_filename):
-            os.remove(self.__thread_filename)
-        # 'iso-8859-1', 'cp1252'
-        if not self.__thread_file:
-            # self.__thread_file = open(self.__thread_filename, "a+", encoding='utf-8')
-            self.__thread_file = open(self.__thread_filename, "a+", encoding='latin-1')
-        for line in open(os.path.join('resources', "page_header.txt"), "r"):
-            if line.startswith('<meta name="description"'):
-                self.__thread_file.write(
-                    '<meta name=\"description\" content=\"{}\" />'.format(self.__thread_name))
-            elif line.startswith('<title>'):
-                self.__thread_file.write('<title>' + self.__thread_name + '</title>')
-            else:
-                self.__thread_file.write(line)
-
-    def close_file(self):
-        self.__thread_file.write('\n</body></html>')
-        self.__thread_file.close()
-        self.__thread_file = None
 
     def parse_thread(self, thread_url):
         if not vbulletin_session.session:
@@ -127,7 +106,7 @@ class VBulletinThreadParser:
             next_url = find_next(soup)
             if next_url:
                 self.__page_number = get_page_number_from_url(next_url)
-                next_url = self.__base_url + next_url
+                next_url = vbulletin_session.config['VBULLETIN']['base_url'] + next_url
                 if next_url != current_url:
                     current_url = next_url
                 else:
@@ -147,10 +126,11 @@ class VBulletinThreadParser:
             # print('Post #' + num_post + '\Fecha: ' + fecha)
 
     def format_post_url(self, id_post):
-        self.__current_post_url = '{}showthread.php?t={}&page={}#post{}'.format(self.__base_url,
-                                                                                self.__thread_id,
-                                                                                self.__page_number,
-                                                                                id_post)
+        self.__current_post_url = '{}showthread.php?t={}&page={}#post{}'.format(
+            vbulletin_session.config['VBULLETIN']['base_url'],
+            self.__thread_id,
+            self.__page_number,
+            id_post)
 
     def init_post(self):
         self.__current_post_url = ''
@@ -158,21 +138,6 @@ class VBulletinThreadParser:
         self.__current_post_date = ''
         self.__current_post_author = ''
         self.__current_post_author_profile = ''
-
-    def write_str_to_file(self, table_str, retries=10):
-        if retries > 0:
-            try:
-                self.__thread_file.write(table_str)
-                return True
-            except UnicodeEncodeError as UniErr:
-                print(str(UniErr))
-                if UniErr.reason == 'surrogates not allowed':
-                    # problema con codificación de emojis
-                    table_str_2 = table_str.encode('utf-8', errors='surrogatepass')
-                    return self.write_str_to_file(str(table_str_2, encoding='utf-8', errors='ignore'), retries - 1)
-            except Exception as err:
-                print(str(err))
-        return False
 
     def parse_thread_posts(self, soup):
         author_matches = 0
@@ -189,50 +154,26 @@ class VBulletinThreadParser:
                     return
                 [self.__current_post_author, self.__current_post_author_profile] = parse_post_author(post_table,
                                                                                                      id_post,
-                                                                                                     self.__base_url)
+                                                                                                     vbulletin_session.config[
+                                                                                                         'VBULLETIN'][
+                                                                                                         'base_url'])
                 if (not self.__username) or (self.__current_post_author == self.__username):
                     self.format_post_url(id_post)
                     self.parse_post_date_number(post_table)
                     content_div = post_table.find('td', {'id': 'td_post_' + id_post})
                     if not content_div:
                         return
-                    self.fix_local_links(post_table)
+                    fix_local_links(post_table)
                     post_table_list.append(post_table)
         return post_table_list
 
-    def fix_local_links(self, post_table):
-        """
-            Links locales:
-            - citas de otros mensajes:
-                <a href="showthread.php?t=...&page=..#post..."  ...> </a>
-            - número de mensaje en el hilo:
-                <a href="showthread.php?p=...#post..." ...></a>
-            - enlace al perfil del usuario
-                <a class="bigusername" href="member.php?u=...">...</a>
-            Imágenes
-                <img id="fcterremoto" class="avatar" src="//st.some_forum.com/forum/customavatars/....gif"
-                    alt="Avatar de ..." title="Avatar de ..." width="120" height="120" border="0">
-        """
-        regex_member = re.compile("member\.php\?u=([0-9]+)")
-        regex_thread = re.compile("showthread\.php\?[pt]=([0-9]+)")
-        all_member_links = post_table.find_all('a', {'href': regex_member}, recursive=True)
-        all_thread_links = post_table.find_all('a', {'href': regex_thread}, recursive=True)
-        for link in all_member_links:
-            link['href'] = self.__base_url + link['href']
-        for link in all_thread_links:
-            link['href'] = self.__base_url + link['href']
-        forum_url_parts = urlparse(self.__base_url)
-        img_regex = forum_url_parts.netloc.replace('www', '//st') + forum_url_parts.path + '[customavatars|images]'
-        regex_local_imgs = re.compile(img_regex)
-        all_local_imgs = post_table.find_all('img', {'src': regex_local_imgs}, recursive=True)
-        for img in all_local_imgs:
-            img['src'] = 'https:' + img['src']
-
     def write_output_file(self, thread_url, all_post_table_list):
         save_images = (vbulletin_session.config['VBULLETIN'].get('save_images', '') == 'True')
-        output_dir = vbulletin_session.config['VBULLETIN'].get('output_dir', '')
-        server_root = vbulletin_session.config['VBULLETIN'].get('http_server_root', output_dir)
-        self.open_file(thread_url, output_dir=output_dir)
+        regex_id = re.compile("t=([0-9]+)")
+        m = regex_id.search(thread_url)
+        if m:
+            self.__thread_id = m.group(1)
+        thread_file = open_thread_file(thread_url, self.__thread_id, self.__thread_name)
         for post_table in all_post_table_list:
             table_str = '<table '
             for k, v in post_table.attrs.items():
@@ -248,9 +189,9 @@ class VBulletinThreadParser:
                         src_txt = img['src']
                         if not img.get('src_old', None):
                             # some nodes are parsed more than once (!) hack to detect this
-                            img['src'] = save_image(src_txt, output_dir, server_root=server_root)
+                            img['src'] = save_image(src_txt)
                             img['src_old'] = src_txt
                 table_str += str(child)
             table_str += '</table>'
-            self.write_str_to_file(table_str)
-        self.close_file()
+            write_str_to_thread_file(thread_file, table_str)
+        close_thread_file(thread_file)

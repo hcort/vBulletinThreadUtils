@@ -1,8 +1,9 @@
 from vBulletinSearch import start_searching
 from vBulletinSession import vbulletin_session
 from vBulletinThreadDateParser import find_user_message_timestamp
+from vBulletinThreadParser import find_user_messages_in_thread_list
 from vBulletinWordCloud import find_user_message_wordcloud
-from vBulletingUserMessagesByThread import VBulletinUserMessagesByThread
+from vBulletinFileUtils import save_search_results_as_index_page
 
 
 def thread_id_to_thread_link_dict(thread_id):
@@ -40,16 +41,14 @@ def main():
     link_list = create_link_list()
 
     if operation_mode == 'SEARCHTHREADS':
-        thread_parser = VBulletinUserMessagesByThread(base_url)
-        thread_parser.find_user_messages(link_list, filter_usr)
-        thread_parser.create_index_page(link_list)
+        find_user_messages_in_thread_list(link_list, filter_usr)
+        save_search_results_as_index_page(link_list)
     elif operation_mode == 'TIMESTAMP':
         find_user_message_timestamp(link_list, filter_usr)
     elif operation_mode == 'WORDCLOUD':
         find_user_message_wordcloud(link_list, filter_usr, base_url)
     elif operation_mode == 'SINGLETHREAD':
-        thread_parser = VBulletinUserMessagesByThread(base_url)
-        thread_parser.find_user_messages(link_list, filter_usr)
+        find_user_messages_in_thread_list(link_list, filter_usr)
     else:
         print('Operation mode: ' + operation_mode + ' unknown')
 
