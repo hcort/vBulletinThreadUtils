@@ -45,10 +45,7 @@ class VBulletinSession:
             'logb2': 'Acceder'}
         # FIXME retrasar la creación de la sesión hasta el último momento
         # login_url = 'https://www.forocoches.com/foro/misc.php?do=page&template=ident'
-        session = VBulletinLogin(base_url + 'login.php', login_data)
-        if not session:
-            exit()
-
+        self.__session = VBulletinLogin(base_url + 'login.php', login_data)
 
 
 vbulletin_session = VBulletinSession()

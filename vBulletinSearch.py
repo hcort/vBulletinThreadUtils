@@ -1,5 +1,4 @@
 # beautiful soup for HTML parsing
-import os
 import re
 import urllib.parse
 
@@ -81,6 +80,19 @@ def get_links(base_url, soup, search_query='', strict_search=False):
     return links
 
 
+def get_token(search_url):
+    if not vbulletin_session.session:
+        return None
+    search_page = vbulletin_session.session.get(search_url)
+    if search_page.status_code != requests.codes.ok:
+        return
+    soup = BeautifulSoup(search_page.text, features="html.parser")
+    # <input type="hidden" name="securitytoken" value="1599576018-..." />
+    hidden_token = soup.find('input', {'name': 'securitytoken'})
+    security_token = hidden_token.get('value', default='')
+    return security_token
+
+
 class VBulletinSearch:
 
     def __init__(self, base_url):
@@ -90,18 +102,6 @@ class VBulletinSearch:
     def base_url(self):
         return self.__base_url
 
-    def get_token(self, search_url):
-        if not vbulletin_session.session:
-            return None
-        search_page = vbulletin_session.session.get(search_url)
-        if search_page.status_code != requests.codes.ok:
-            return
-        soup = BeautifulSoup(search_page.text, features="html.parser")
-        # <input type="hidden" name="securitytoken" value="1599576018-..." />
-        hidden_token = soup.find('input', {'name': 'securitytoken'})
-        security_token = hidden_token.get('value', default='')
-        return security_token
-
     def start_searching(self, search_query='', thread_author='', strict_search=False):
         if not vbulletin_session.session:
             return None
@@ -109,7 +109,7 @@ class VBulletinSearch:
         # search.php?do=process&query=...&titleonly=...&forumchoice[]=...&
         search_url = self.__base_url + 'search.php'
         # some_forum.com/forum/search.php?do=process
-        security_token = self.get_token(search_url)
+        security_token = get_token(search_url)
         # search_query = ''
         search_query_encoded = urllib.parse.quote_plus(search_query)
         search_params = {

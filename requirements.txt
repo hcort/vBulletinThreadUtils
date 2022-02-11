@@ -8,4 +8,4 @@ setuptools==59.6.0
 soupsieve>=2.0.1
 urllib3>=1.25.10
 python-slugify>=4.0.1
-selenium
+selenium>=3.141.0

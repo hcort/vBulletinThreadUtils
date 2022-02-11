@@ -110,7 +110,7 @@ class VBulletinThreadParser:
         self.__thread_file.close()
         self.__thread_file = None
 
-    def parse_thread(self, thread_url, save_images=False, output_dir='', server_root=''):
+    def parse_thread(self, thread_url):
         if not vbulletin_session.session:
             return -1
         current_url = thread_url
@@ -135,8 +135,7 @@ class VBulletinThreadParser:
             else:
                 current_url = None
         author_matches = len(all_post_table_list)
-        self.write_output_file(thread_url, all_post_table_list, save_images=save_images,
-                               output_dir=output_dir, server_root=server_root)
+        self.write_output_file(thread_url, all_post_table_list)
         return author_matches
 
     def parse_post_date_number(self, post_table):
@@ -229,7 +228,10 @@ class VBulletinThreadParser:
         for img in all_local_imgs:
             img['src'] = 'https:' + img['src']
 
-    def write_output_file(self, thread_url, all_post_table_list, save_images=False, output_dir='', server_root=''):
+    def write_output_file(self, thread_url, all_post_table_list):
+        save_images = (vbulletin_session.config['VBULLETIN'].get('save_images', '') == 'True')
+        output_dir = vbulletin_session.config['VBULLETIN'].get('output_dir', '')
+        server_root = vbulletin_session.config['VBULLETIN'].get('http_server_root', output_dir)
         self.open_file(thread_url, output_dir=output_dir)
         for post_table in all_post_table_list:
             table_str = '<table '
