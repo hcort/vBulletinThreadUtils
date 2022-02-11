@@ -1,13 +1,12 @@
 import re
 
+import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import requests
+from selenium.webdriver.support.ui import WebDriverWait
 
 
 def test_requests(driver, current_url):
@@ -35,12 +34,13 @@ def test_requests(driver, current_url):
 
 
 def VBulletinLoginSelenium(login_url='', login_data={}):
+    if not login_url:
+        return None
     driver = webdriver.Firefox()
     # selenium.common.exceptions.WebDriverException: Message: Service geckodriver unexpectedly exited. Status code
     # was: 64 miro geckodriver.log geckodriver: error: Found argument '--websocket-port' which wasn't expected,
     # or isn't valid in this context > actualizar geckodriver https://stackoverflow.com/a/70822145/4105601
-    login_url_2 = 'https://www.forocoches.com/foro/'
-    driver.get(login_url_2)
+    driver.get(login_url)
     element = driver.find_element(By.ID, "navbar_username")
     element.send_keys(login_data['vb_login_username'])
     element = driver.find_element(By.ID, "navbar_password")
