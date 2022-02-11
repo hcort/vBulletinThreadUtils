@@ -1,4 +1,4 @@
-from vBulletinSearch import VBulletinSearch
+from vBulletinSearch import start_searching
 from vBulletinSession import vbulletin_session
 from vBulletinThreadDateParser import find_user_message_timestamp
 from vBulletinWordCloud import find_user_message_wordcloud
@@ -27,9 +27,7 @@ def create_link_list():
         for thread in thread_list:
             link_list.append(thread_id_to_thread_link_dict(thread))
     else:
-        base_url = vbulletin_session.config['VBULLETIN']['base_url']
-        parser = VBulletinSearch(base_url)
-        link_list = parser.start_searching()
+        link_list = start_searching()
     return link_list
 
 

@@ -93,59 +93,58 @@ def get_token(search_url):
     return security_token
 
 
-class VBulletinSearch:
+def build_search_params(search_url, search_query):
+    thread_author = vbulletin_session.config['SEARCHTHREADS'].get('searchuser', '')
+    security_token = get_token(search_url)
+    # search_query = ''
+    search_query_encoded = urllib.parse.quote_plus(search_query)
+    return {
+        's': '',
+        'securitytoken': security_token,
+        'do': 'process',
+        'searchthreadid': '',
+        'query': search_query_encoded,
+        'titleonly': '1',
+        'searchuser': thread_author,
+        'starteronly': '0',
+        'exactname': '1',
+        'replyless': '0',
+        # 'replylimit': '1000',  # sólo hilos con más de 1000 respuestas (elimino ruido)
+        'searchdate': '0',
+        'beforeafter': 'after',
+        'sortby': 'lastpost',
+        'order': 'descending',
+        'showposts': '0',
+        'forumchoice[]': '23',  # subforo de empleo
+        'childforums': '1',
+        'saveprefs': '1'
+    }
 
-    def __init__(self, base_url):
-        self.__base_url = base_url
 
-    @property
-    def base_url(self):
-        return self.__base_url
-
-    def start_searching(self, search_query='', thread_author='', strict_search=False):
-        if not vbulletin_session.session:
-            return None
-        # otra alternativa:
-        # search.php?do=process&query=...&titleonly=...&forumchoice[]=...&
-        search_url = self.__base_url + 'search.php'
-        # some_forum.com/forum/search.php?do=process
-        security_token = get_token(search_url)
-        # search_query = ''
-        search_query_encoded = urllib.parse.quote_plus(search_query)
-        search_params = {
-            's': '',
-            'securitytoken': security_token,
-            'do': 'process',
-            'searchthreadid': '',
-            'query': search_query_encoded,
-            'titleonly': '1',
-            'searchuser': thread_author,
-            'starteronly': '0',
-            'exactname': '1',
-            'replyless': '0',
-            # 'replylimit': '1000',  # sólo hilos con más de 1000 respuestas (elimino ruido)
-            'searchdate': '0',
-            'beforeafter': 'after',
-            'sortby': 'lastpost',
-            'order': 'descending',
-            'showposts': '0',
-            'forumchoice[]': '23',  # subforo de empleo
-            'childforums': '1',
-            'saveprefs': '1'
-        }
-        # TODO format this properly
-        search_url_process = search_url + '?do=process'
-        headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-        start_search = vbulletin_session.session.post(search_url_process, data=search_params, headers=headers)
-        search_soup = BeautifulSoup(start_search.text, features="html.parser")
-        links = get_links(base_url=self.__base_url, soup=search_soup,
-                          search_query=search_query, strict_search=strict_search)
+def start_searching():
+    if not vbulletin_session.session:
+        return None
+    base_url = vbulletin_session.config['VBULLETIN']['base_url']
+    search_query = vbulletin_session.config['SEARCHTHREADS'].get('search_words', '')
+    strict_search = vbulletin_session.config['SEARCHTHREADS'].get('strict_search', False)
+    # otra alternativa:
+    # search.php?do=process&query=...&titleonly=...&forumchoice[]=...&
+    search_url = base_url + 'search.php'
+    # some_forum.com/forum/search.php?do=process
+    search_params =  build_search_params(search_url)
+    # TODO format this properly
+    search_url_process = search_url + '?do=process'
+    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+    start_search = vbulletin_session.session.post(search_url_process, data=search_params, headers=headers)
+    search_soup = BeautifulSoup(start_search.text, features="html.parser")
+    links = get_links(base_url=base_url, soup=search_soup,
+                      search_query=search_query, strict_search=strict_search)
+    next_results_page = find_next(search_soup)
+    while next_results_page:
+        next_url = base_url + next_results_page
+        next_search = vbulletin_session.session.get(next_url)
+        search_soup = BeautifulSoup(next_search.text, features="html.parser")
+        links += get_links(base_url=base_url, soup=search_soup,
+                           search_query=search_query, strict_search=strict_search)
         next_results_page = find_next(search_soup)
-        while next_results_page:
-            next_url = self.__base_url + next_results_page
-            next_search = vbulletin_session.session.get(next_url)
-            search_soup = BeautifulSoup(next_search.text, features="html.parser")
-            links += get_links(base_url=self.__base_url, soup=search_soup,
-                               search_query=search_query, strict_search=strict_search)
-            next_results_page = find_next(search_soup)
-        return links
+    return links
