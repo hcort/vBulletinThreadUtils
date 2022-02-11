@@ -4,7 +4,19 @@ import os
 from vBulletinLogin import VBulletinLogin
 from vBulletinSearch import VBulletinSearch
 from vBulletinThreadDateParser import find_user_message_timestamp
+from vBulletinWordCloud import find_user_message_wordcloud
 from vBulletingUserMessagesByThread import VBulletinUserMessagesByThread
+
+
+def thread_id_to_thread_link_dict(config, thread_id):
+    return {
+                'id': thread_id,
+                'url': '{base}/showthread.php?t={thread_id}'.format(base=config['VBULLETIN'].get('base_url', ''), thread_id=thread_id),
+                'title': '',
+                'hover': '',
+                'author': '',
+                'author_id': ''
+            }
 
 
 def main():
@@ -37,6 +49,7 @@ def main():
         'vb_login_password': pwd,
         'cookieuser': '1',
         'logb2': 'Acceder'}
+    # FIXME retrasar la creación de la sesión hasta el último momento
     # login_url = 'https://www.forocoches.com/foro/misc.php?do=page&template=ident'
     session = VBulletinLogin(base_url + 'login.php', login_data)
     if not session:
@@ -62,19 +75,21 @@ def main():
         parser = VBulletinSearch(session)
         link_list = parser.start_searching(search_query=search_query, thread_author=search_user)
         find_user_message_timestamp(link_list, filter_usr)
+    elif operation_mode == 'WORDCLOUD':
+        # un único hilo o una búsqueda (?)
+        if config[operation_mode].get('thread_id', ''):
+            link_list = [thread_id_to_thread_link_dict(config, config[operation_mode].get('thread_id', ''))]
+        elif config[operation_mode].get('thread_list', ''):
+            thread_list = config[operation_mode].get('thread_list', '').split(',')
+            link_list = []
+            for thread in thread_list:
+                link_list.append(thread_id_to_thread_link_dict(config, thread))
+        else:
+            parser = VBulletinSearch(session)
+            link_list = parser.start_searching(search_query=search_query, thread_author=search_user, strict_search=strict_search)
+        find_user_message_wordcloud(link_list, filter_usr, base_url, session)
     elif operation_mode == 'SINGLETHREAD':
-        # extraer {'id': '', 'url': '', 'title': '', 'hover': '', 'author': '', 'author_id': ''}
-        thid = config['SINGLETHREAD']['thread_id']
-        this_thread = {
-            'id': thid,
-            'url': base_url + 'showthread.php?t=' + thid,
-            'title': '',
-            'hover': '',
-            'author': '',
-            'author_id': ''
-        }
-        # FIXME get thread title
-        link_list = [this_thread]
+        link_list = [thread_id_to_thread_link_dict(config, config[operation_mode].get('thread_id', ''))]
         thread_parser = VBulletinUserMessagesByThread(session, base_url)
         thread_parser.find_user_messages(link_list, filter_usr,
                                          save_images=save_images, output_dir=output_dir, server_root=server_root)
