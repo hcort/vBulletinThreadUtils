@@ -3,7 +3,7 @@ import datetime
 import locale
 
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 from vBulletinSession import vbulletin_session
 
@@ -57,6 +57,9 @@ def parse_quotes(post_text_start):
 def get_post_text(table):
     post_text_start = table.select_one(post_text_selector)
     # post_text = post_text_start.decode_contents() if post_text_start else ''
+    for child in post_text_start.children:
+        if type(child) is Tag:
+            print(child)
     post_text = post_text_start.prettify(formatter="minimal") if post_text_start else ''
     return post_text
 
@@ -143,7 +146,7 @@ class VBulletinThreadParserGEN:
         # user_location = table.select_one(user_location_selector)
         # user_car_info = table.select_one(user_car_info_selector)
         # TODO better filtering
-        if self.__username and (self.__username == user_name):
+        if (not self.__username) or (self.__username == user_name):
             self.__parsed_messages[post_id] = {
                 'author': {
                     'id': user_id,
@@ -154,7 +157,7 @@ class VBulletinThreadParserGEN:
                 'date': post_date,
                 'link': post_link,
                 'title': get_post_title(table),
-                'text': get_post_text(table, post_id)
+                'text': get_post_text(table)
             }
         print('Read post #' + post_index)
         return post_id
