@@ -9,28 +9,8 @@ from vBulletinSession import vbulletin_session
 
 
 def find_next(soup):
-    """
-    <div class="pagenav" align="right">
-    <table class="tborder" cellspacing="1" cellpadding="3" border="0">
-    <tbody>
-        <tr>
-            <td class="alt1">
-                <a  rel="next"
-                    class="smallfont"
-                    href="showthread.php?t=8142569&amp;page=n"
-                    title="Próxima Página - Resultados del xx al xx de xxx">&gt;
-                </a>
-            </td> <- página siguiente
-    """
-    pagenav_div = soup.find_all("div", class_="pagenav")
-    for div in pagenav_div:
-        lista_paginas = div.findChildren("td", class_="alt1", recursive=True)
-        for pagina in lista_paginas:
-            pag_sig = pagina.find("a", {"rel": "next"})
-            if pag_sig:
-                next_url = pag_sig.get('href')
-                return next_url
-    return None
+    pag_sig = soup.find("a", {"rel": "next"})
+    return pag_sig.get('href') if pag_sig else ''
 
 
 def get_thread_author(cell):

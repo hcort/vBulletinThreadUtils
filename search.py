@@ -1,7 +1,7 @@
 from vBulletinSearch import start_searching
 from vBulletinSession import vbulletin_session
 from vBulletinThreadDateParser import find_user_message_timestamp
-from vBulletinThreadParser import find_user_messages_in_thread_list
+from vBulletinThreadParserGen import find_user_messages_in_thread_list
 from vBulletinWordCloud import find_user_message_wordcloud
 from vBulletinFileUtils import save_search_results_as_index_page
 

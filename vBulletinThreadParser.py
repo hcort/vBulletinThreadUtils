@@ -11,14 +11,14 @@ from vBulletinSearch import find_next
 from vBulletinSession import vbulletin_session
 
 
-def find_user_messages_in_thread_list(links, username):
-    num_links = len(links)
-    for idx, link in enumerate(links):
-        print('[' + str(idx) + '/' + str(num_links) + '] - ' + str(link))
-        thread_name = link['title']
-        thread_parser = VBulletinThreadParser(thread_name, username)
-        author_matches = thread_parser.parse_thread(link['url'])
-        link['matches'] = author_matches
+# def find_user_messages_in_thread_list(links, username):
+#     num_links = len(links)
+#     for idx, link in enumerate(links):
+#         print('[' + str(idx) + '/' + str(num_links) + '] - ' + str(link))
+#         thread_name = link['title']
+#         thread_parser = VBulletinThreadParser(thread_name, username)
+#         author_matches = thread_parser.parse_thread(link['url'])
+#         link['matches'] = author_matches
 
 
 def get_page_number_from_url(next_url):
@@ -79,7 +79,6 @@ class VBulletinThreadParser:
 
     def __init__(self, thread_name, username):
         self.__start_url = ''
-        self.__page_number = ''
         self.__thread_id = ''
         self.__current_post_url = ''
         self.__current_post_number = ''
