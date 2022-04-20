@@ -4,127 +4,138 @@ import urllib.parse
 
 import requests
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.select import Select
+from selenium.webdriver.support.ui import WebDriverWait
 
 from vBulletinSession import vbulletin_session
 
 
 def find_next(soup):
-    pag_sig = soup.find("a", {"rel": "next"})
-    return pag_sig.get('href') if pag_sig else ''
+    next_link = soup.find("a", {"rel": "next"})
+    return vbulletin_session.config['VBULLETIN']['base_url'] + next_link.get('href', '') if next_link else ''
 
 
-def get_thread_author(cell):
-    author = ''
-    author_id = ''
-    all_span = cell.find_all('span', recursive=True)
-    for span in all_span:
-        click_event = span.get('onclick', default='')
-        if click_event:
-            author = span.text
-            click_regex = re.compile("member\.php\?u=([0-9]+)")
-            m = click_regex.search(click_event)
-            if m:
-                author_id = m.group(1)
-                break
-    return [author, author_id]
+re_author_from_link = re.compile("member.php\?u=([0-9]+)")
+re_thread_id_from_link = re.compile("thread_title_([0-9]+)")
 
 
 def get_links(base_url, soup, search_query='', strict_search=False):
-    lista_resultados = soup.find('table', {'id': 'threadslist'})
-    # <a href="showthread.php?t=8149854"
-    #   id="thread_title_8149854">THIS IS THE THREAD TITLE</a>
-    regex_id_td = re.compile("td_threadtitle_([0-9]+)")
-    # regex_id_link = re.compile("thread_title_([0-9]+)")
-    all_table_cells = lista_resultados.find_all('td', {'id': regex_id_td})
     links = []
-    for cell in all_table_cells:
-        m = regex_id_td.search(cell['id'])
-        if m:
-            thread_id = m.group(1)
-            link = cell.find('a', {'id': 'thread_title_' + thread_id})
-            hover = cell.get('title', default='')
-            [author, author_id] = get_thread_author(cell)
-            nuevo_link = {
-                'id': thread_id,
-                'url': base_url + 'showthread.php?t=' + thread_id,
-                'title': link.text,
-                'hover': hover,
-                'author': author,
-                'author_id': author_id
-            }
-            if strict_search:
-                if nuevo_link['title'].find(search_query) >= 0:
-                    links.append(nuevo_link)
-            else:
-                links.append(nuevo_link)
+    all_threads_table = soup.select('td[id^="td_threadtitle_"] > div > a[id^="thread_title_"]')
+    all_threads_authors = soup.select('td[id^="td_threadtitle_"] > div.smallfont')
+    for link in zip(all_threads_table, all_threads_authors):
+        thread_id_m = re_author_from_link.search(link[0].attrs.get('id', ''))
+        author_id_m = re_thread_id_from_link.search(link[1].attrs.get('onclick', ''))
+        thread_id = thread_id_m.group(1) if thread_id_m else ''
+        if (not strict_search) or (strict_search and (link[0].text.lower().find(search_query.lower()) >= 0)):
+            links.append(
+                {
+                    'id': thread_id,
+                    'url': base_url + 'showthread.php?t=' + thread_id,
+                    'title': link[0].text,
+                    'hover': link[0].attrs.get('title', ''),
+                    'author': link[1].text,
+                    'author_id': author_id_m.group(1) if author_id_m else ''
+                })
     return links
 
 
-def get_token(search_url):
-    if not vbulletin_session.session:
-        return None
-    search_page = vbulletin_session.session.get(search_url)
-    if search_page.status_code != requests.codes.ok:
-        return
-    soup = BeautifulSoup(search_page.text, features="html.parser")
-    # <input type="hidden" name="securitytoken" value="1599576018-..." />
-    hidden_token = soup.find('input', {'name': 'securitytoken'})
-    security_token = hidden_token.get('value', default='')
-    return security_token
-
-
-def build_search_params(search_url, search_query):
-    thread_author = vbulletin_session.config['SEARCHTHREADS'].get('searchuser', '')
-    security_token = get_token(search_url)
-    # search_query = ''
-    search_query_encoded = urllib.parse.quote_plus(search_query)
-    return {
-        's': '',
-        'securitytoken': security_token,
-        'do': 'process',
-        'searchthreadid': '',
-        'query': search_query_encoded,
-        'titleonly': '1',
-        'searchuser': thread_author,
-        'starteronly': '0',
-        'exactname': '1',
-        'replyless': '0',
-        # 'replylimit': '1000',  # sólo hilos con más de 1000 respuestas (elimino ruido)
-        'searchdate': '0',
-        'beforeafter': 'after',
-        'sortby': 'lastpost',
-        'order': 'descending',
-        'showposts': '0',
-        'forumchoice[]': '23',  # subforo de empleo
-        'childforums': '1',
-        'saveprefs': '1'
-    }
-
-
-def start_searching():
-    if not vbulletin_session.session:
-        return None
+def loop_search_results(driver, start_url):
+    timeout = 100
+    current_url = start_url
+    first_search = True
     base_url = vbulletin_session.config['VBULLETIN']['base_url']
     search_query = vbulletin_session.config['SEARCHTHREADS'].get('search_words', '')
     strict_search = vbulletin_session.config['SEARCHTHREADS'].get('strict_search', False)
-    # otra alternativa:
-    # search.php?do=process&query=...&titleonly=...&forumchoice[]=...&
-    search_url = base_url + 'search.php'
-    # some_forum.com/forum/search.php?do=process
-    search_params = build_search_params(search_url, search_query)
-    # TODO format this properly
-    search_url_process = search_url + '?do=process'
-    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-    start_search = vbulletin_session.session.post(search_url_process, data=search_params, headers=headers)
-    search_soup = BeautifulSoup(start_search.text, features="html.parser")
-    links = get_links(base_url=base_url, soup=search_soup,
-                      search_query=search_query, strict_search=strict_search)
-    next_results_page = find_next(search_soup)
-    while next_results_page:
-        next_url = base_url + next_results_page
-        next_search = vbulletin_session.session.get(next_url)
-        search_soup = BeautifulSoup(next_search.text, features="html.parser")
-        links += get_links(base_url=base_url, soup=search_soup,
-                           search_query=search_query, strict_search=strict_search)
-        next_results_page = find_next(search_soup)
+    links = []
+    while current_url:
+        if first_search:
+            # source = driver.execute_script("return document.body.innerHTML;")
+            source = driver.page_source
+            search_soup = BeautifulSoup(source, features="html.parser")
+            first_search = False
+        else:
+            driver.get(current_url)
+            element_present = EC.presence_of_element_located((By.ID, 'threadslist'))
+            WebDriverWait(driver, timeout).until(element_present)
+            # source = driver.execute_script("return document.body.innerHTML;")
+            source = driver.page_source
+            search_soup = BeautifulSoup(source, features="html.parser")
+        if search_soup:
+            links += get_links(base_url=base_url, soup=search_soup,
+                               search_query=search_query, strict_search=strict_search)
+            current_url = find_next(search_soup)
     return links
+
+
+def fill_search_form(driver):
+    # TODO read extra parameters from config
+    subforum_select = Select(driver.find_element(By.NAME, "forumchoice[]"))
+    subforum_select.select_by_value('23')
+    title_only_select = Select(driver.find_element(By.CSS_SELECTOR, "select[name=titleonly]"))
+    title_only_select.select_by_value('1')  # 0: search in msg, 1: search in title
+    thread_starter_select = Select(driver.find_element(By.CSS_SELECTOR, "select[name=starteronly]"))
+    thread_starter_select.select_by_value('1')
+    minimum_message_field = driver.find_element(By.CSS_SELECTOR, 'div#collapseobj_search_adv table.panel tbody tr '
+                                                                 'td:nth-of-type(1) fieldset.fieldset div '
+                                                                 'input.bginput')
+    minimum_message_field.send_keys('0')
+    search_query_input = driver.find_element(By.CSS_SELECTOR, 'td.panelsurround > table.panel > tbody > tr > '
+                                                              'td:nth-of-type(1) fieldset.fieldset table tbody tr '
+                                                              'td div input.bginput')
+    search_query = vbulletin_session.config['SEARCHTHREADS'].get('search_words', '')
+    search_query_input.send_keys(search_query)
+    thread_author_field = driver.find_element(By.ID, "userfield_txt")
+    thread_author = vbulletin_session.config['SEARCHTHREADS'].get('searchuser', '')
+    thread_author_field.send_keys(thread_author)
+    thread_author_field.send_keys(Keys.RETURN)
+
+
+def import_cookies_from_session(driver):
+    session = vbulletin_session.session
+    driver.get(vbulletin_session.config['VBULLETIN']['base_url'])
+    for name, value in session.cookies.items():
+        driver.delete_cookie(name)
+        driver.add_cookie({'name': name, 'value': value})
+
+
+def click_cookies_button_and_wait(driver):
+    try:
+        # press accept cookies button so select is not obscured
+        element_present = EC.presence_of_element_located((By.CSS_SELECTOR, "button.sd-cmp-JnaLO"))
+        WebDriverWait(driver, timeout=1000).until(element_present)
+        cookie_button = driver.find_element(By.CSS_SELECTOR, "button.sd-cmp-JnaLO")
+        cookie_button.click()
+    except Exception as ex:
+        print('Cant locate cookies button. ' + str(ex))
+
+
+def search_selenium():
+    # force login here before opening other driver
+    base_url = vbulletin_session.config['VBULLETIN']['base_url']
+    search_url = base_url + 'search.php?do=process'
+    driver = webdriver.Firefox()
+    try:
+        import_cookies_from_session(driver)
+        driver.get(search_url)
+        click_cookies_button_and_wait(driver)
+        fill_search_form(driver)
+        element_present = EC.presence_of_element_located((By.ID, 'threadslist'))
+        WebDriverWait(driver, timeout=1000).until(element_present)
+        links = loop_search_results(driver, start_url=search_url)
+    except TimeoutException as ex:
+        print('Error accessing {}: Timeout: {}'.format(search_url, str(ex)))
+    except Exception as ex:
+        print('Error accessing {}: Timeout: {}'.format(search_url, str(ex)))
+    finally:
+        driver.close()
+    return links
+
+
+def start_searching():
+    return search_selenium()
