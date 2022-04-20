@@ -5,6 +5,7 @@ import re
 
 import requests
 from bs4 import BeautifulSoup
+from tqdm.auto import tqdm
 
 import MessageFilter
 from html2bbcode import parse_children_in_node
@@ -15,7 +16,7 @@ from vBulletinSession import vbulletin_session
 def find_user_messages_in_thread_list(links, username):
     num_links = len(links)
     for idx, thread_item in enumerate(links):
-        print('[' + str(idx) + '/' + str(num_links) + '] - ' + str(thread_item))
+        print('\n[' + str(idx+1) + '/' + str(num_links) + '] - ' + str(thread_item))
         # thread_name = link['title']
         if username:
             parse_thread(thread_info=thread_item, filter_obj=MessageFilter.MessageFilterByAuthor(username))
@@ -46,12 +47,9 @@ post_index_selector = 'tr:nth-child(1) > td.thead:nth-child(2) > a'
 
 
 def get_next_url(soup):
-    navigation_menu = soup.select_one(page_nav_bar_selector)
-    if navigation_menu:
-        next_link = navigation_menu.select_one('a[rel="next"]')
-        if next_link:
-            return vbulletin_session.config['VBULLETIN']['base_url'] + next_link.get('href', '')
-    return ''
+    next_link = soup.select_one('a[rel="next"]')
+    if next_link:
+        return vbulletin_session.config['VBULLETIN']['base_url'] + next_link.get('href', '')
 
 
 def get_post_text(table):
@@ -112,8 +110,6 @@ def parse_post_table(post_id, table):
     # user_reg_date = table.select_one(user_registration_date_selector)
     # user_location = table.select_one(user_location_selector)
     # user_car_info = table.select_one(user_car_info_selector)
-    # table class = tborder-author
-    # print('Read post #' + post_index)
     return {
         'author': {
             'id': user_id,
@@ -130,6 +126,17 @@ def parse_post_table(post_id, table):
     }
 
 
+def get_last_page(soup):
+    last_link = soup.select_one('td a.smallfont strong')
+    if last_link:
+        parent_link = last_link.parent.attrs.get('href', '')
+        regex_id = re.compile("page=([0-9]+)")
+        m = regex_id.search(parent_link)
+        if m:
+            return m.group(1)
+    return ''
+
+
 def parse_thread(thread_info: dict, filter_obj: MessageFilter = None):
     if not vbulletin_session.session:
         return -1
@@ -137,23 +144,28 @@ def parse_thread(thread_info: dict, filter_obj: MessageFilter = None):
     thread_info['parsed_messages'] = {}
     if not current_url:
         return
-    while current_url:
-        print('Parsing ' + current_url)
-        current_page = vbulletin_session.session.get(current_url)
-        if current_page.status_code != requests.codes.ok:
-            break
-        soup = BeautifulSoup(current_page.text, features="html.parser")
-        all_posts_table = soup.select('div[id^="edit"] > table[id^="post"]')
-        first_post_id = ''
-        for table in all_posts_table:
-            post_id = table.get('id', '')[-9:]
-            post_dict = parse_post_table(post_id, table)
-            if post_dict and ((not filter_obj) or (filter_obj and (filter_obj.filter_message(post_id, post_dict)))):
-                thread_info['parsed_messages'][post_id] = post_dict
-            if not first_post_id:
-                first_post_id = post_id
-                thread_info['first_post_id'] = first_post_id
-                thread_info['title'] = post_dict.get('title')
-                thread_info['author'] = post_dict.get('author', []).get('username')
-                thread_info['author_id'] = post_dict.get('author', []).get('id', [])
-        current_url = get_next_url(soup)
+    last_page = ''
+    with tqdm(position=0, leave=True, desc='Parsing ' + current_url) as progress:
+        while current_url:
+            current_page = vbulletin_session.session.get(current_url)
+            progress.update()
+            if current_page.status_code != requests.codes.ok:
+                break
+            soup = BeautifulSoup(current_page.text, features="html.parser")
+            if not last_page:
+                last_page = get_last_page(soup)
+                progress.total = int(last_page)
+            all_posts_table = soup.select('div[id^="edit"] > table[id^="post"]')
+            first_post_id = ''
+            for table in all_posts_table:
+                post_id = table.get('id', '')[-9:]
+                post_dict = parse_post_table(post_id, table)
+                if post_dict and ((not filter_obj) or (filter_obj and (filter_obj.filter_message(post_id, post_dict)))):
+                    thread_info['parsed_messages'][post_id] = post_dict
+                if not first_post_id:
+                    first_post_id = post_id
+                    thread_info['first_post_id'] = first_post_id
+                    thread_info['title'] = post_dict.get('title')
+                    thread_info['author'] = post_dict.get('author', []).get('username')
+                    thread_info['author_id'] = post_dict.get('author', []).get('id', [])
+            current_url = get_next_url(soup)

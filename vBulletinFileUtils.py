@@ -160,7 +160,7 @@ def write_str_to_thread_file(thread_file, table_str, retries=10):
             thread_file.write(table_str)
             return True
         except UnicodeEncodeError as UniErr:
-            print(str(UniErr))
+            # print(str(UniErr))
             if UniErr.reason == 'surrogates not allowed':
                 # problema con codificación de emojis
                 table_str_2 = table_str.encode('utf-8', errors='surrogatepass')

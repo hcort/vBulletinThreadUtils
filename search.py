@@ -26,7 +26,7 @@ def create_link_list():
         thread_list = vbulletin_session.config[operation_mode].get('thread_list', '').split(',')
         link_list = []
         for thread in thread_list:
-            link_list.append(thread_id_to_thread_link_dict(thread))
+            link_list.append(thread_id_to_thread_link_dict(thread.strip()))
     else:
         link_list = start_searching()
     return link_list
