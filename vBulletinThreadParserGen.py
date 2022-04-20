@@ -1,12 +1,14 @@
 import calendar
 import datetime
 import locale
+import re
 
 import requests
 from bs4 import BeautifulSoup
 
 import MessageFilter
 from html2bbcode import parse_children_in_node
+from vBulletinFileUtils import save_parse_result_as_file
 from vBulletinSession import vbulletin_session
 
 
@@ -15,9 +17,13 @@ def find_user_messages_in_thread_list(links, username):
     for idx, thread_item in enumerate(links):
         print('[' + str(idx) + '/' + str(num_links) + '] - ' + str(thread_item))
         # thread_name = link['title']
-        thread_parser = VBulletinThreadParserGEN(thread_item)
-        author_matches = thread_parser.parse_thread(filter_obj=MessageFilter.MessageFilterByAuthor(username))
-        thread_item['matches'] = author_matches
+        if username:
+            parse_thread(thread_info=thread_item, filter_obj=MessageFilter.MessageFilterByAuthor(username))
+        else:
+            parse_thread(thread_info=thread_item, filter_obj=None)
+        # save results
+        if vbulletin_session.config['VBULLETIN'].get('output_format', '') != 'BBCode':
+            save_parse_result_as_file(thread_item)
 
 
 page_nav_bar_selector = 'body > div:nth-child(14) > div:nth-child(1) > div:nth-child(1) > table:nth-of-type(4) ' \
@@ -51,7 +57,7 @@ def get_next_url(soup):
 def get_post_text(table):
     post_text_start = table.select_one(post_text_selector)
     # post_text = post_text_start.decode_contents() if post_text_start else ''
-    if vbulletin_session.config['VBULLETIN']['output_format'] == 'BBCode':
+    if vbulletin_session.config['VBULLETIN'].get('output_format') == 'BBCode':
         post_text = parse_children_in_node(post_text_start)
     else:
         post_text = post_text_start.prettify(formatter="minimal") if post_text_start else ''
@@ -107,7 +113,7 @@ def parse_post_table(post_id, table):
     # user_location = table.select_one(user_location_selector)
     # user_car_info = table.select_one(user_car_info_selector)
     # table class = tborder-author
-    print('Read post #' + post_index)
+    # print('Read post #' + post_index)
     return {
         'author': {
             'id': user_id,
@@ -124,33 +130,30 @@ def parse_post_table(post_id, table):
     }
 
 
-class VBulletinThreadParserGEN:
-
-    def __init__(self, thread_item):
-        self.__thread_info = thread_item
-        self.__first_post_id = ''
-        self.__parsed_messages = {}
-
-    def parse_thread(self, filter_obj: MessageFilter = None):
-        if not vbulletin_session.session:
-            return -1
-        current_url = self.__thread_info['url']
-        while current_url:
-            print('Parsing ' + current_url)
-            current_page = vbulletin_session.session.get(current_url)
-            if current_page.status_code != requests.codes.ok:
-                break
-            soup = BeautifulSoup(current_page.text, features="html.parser")
-            all_posts_table = soup.select('div[id^="edit"] > table[id^="post"]')
-            for table in all_posts_table:
-                post_id = table.get('id', '')[-9:]
-                post_dict = parse_post_table(post_id, table)
-                if post_dict and filter_obj and (filter_obj.filter_message(post_id, post_dict)):
-                    self.__parsed_messages[post_id] = post_dict
-                if not self.__first_post_id:
-                    self.__first_post_id = post_id
-                    self.__thread_info['title'] = post_dict.get('title')
-                    self.__thread_info['author'] = post_dict.get('author', []).get('username')
-                    self.__thread_info['author_id'] = post_dict.get('author', []).get('id', [])
-            current_url = get_next_url(soup)
-        return self.__parsed_messages
+def parse_thread(thread_info: dict, filter_obj: MessageFilter = None):
+    if not vbulletin_session.session:
+        return -1
+    current_url = thread_info.get('url', '')
+    thread_info['parsed_messages'] = {}
+    if not current_url:
+        return
+    while current_url:
+        print('Parsing ' + current_url)
+        current_page = vbulletin_session.session.get(current_url)
+        if current_page.status_code != requests.codes.ok:
+            break
+        soup = BeautifulSoup(current_page.text, features="html.parser")
+        all_posts_table = soup.select('div[id^="edit"] > table[id^="post"]')
+        first_post_id = ''
+        for table in all_posts_table:
+            post_id = table.get('id', '')[-9:]
+            post_dict = parse_post_table(post_id, table)
+            if post_dict and ((not filter_obj) or (filter_obj and (filter_obj.filter_message(post_id, post_dict)))):
+                thread_info['parsed_messages'][post_id] = post_dict
+            if not first_post_id:
+                first_post_id = post_id
+                thread_info['first_post_id'] = first_post_id
+                thread_info['title'] = post_dict.get('title')
+                thread_info['author'] = post_dict.get('author', []).get('username')
+                thread_info['author_id'] = post_dict.get('author', []).get('id', [])
+        current_url = get_next_url(soup)

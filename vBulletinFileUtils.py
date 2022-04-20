@@ -73,6 +73,20 @@ def save_image(src_txt, output_dir='', server_root=''):
     return src_txt
 
 
+def save_parse_result_as_file(thread_info):
+    thread_messages = thread_info.get('parsed_messages', {})
+    if not thread_messages:
+        return
+    thread_file = open_thread_file(thread_url=thread_info['url'], thread_id=thread_info['id'],
+                                   thread_name=thread_info['title'])
+    for message in thread_messages:
+        write_message_to_thread_file(thread_file=thread_file,
+                                     thread_id=thread_info['id'],
+                                     message_id=message,
+                                     message=thread_messages[message])
+    close_thread_file(thread_file)
+
+
 def open_thread_file(thread_url, thread_id, thread_name):
     output_dir = vbulletin_session.config['VBULLETIN'].get('output_dir', '')
     regex_id = re.compile("t=([0-9]+)")
@@ -92,6 +106,54 @@ def open_thread_file(thread_url, thread_id, thread_name):
     return thread_file
 
 
+full_message_template = '<table id="post{post_id}" class="tborder-author" style="table-layout: fixed; width: 100%;" ' \
+                        'width="100%" cellspacing="0" cellpadding="5" border="0" align="center"\n' \
+                        '   <tbody>\n' \
+                        '       <tr>\n' \
+                        '           <td class="thead" style="font-weight:normal; ' \
+                        'border: 1px solid #D1D1D1; border-right: 0px" width="175">{post_date}</td>\n' \
+                        '           <td class="thead" style="font-weight:normal; ' \
+                        'border: 1px solid #D1D1D1; border-left: 0px" align="right">' \
+                        '#<a href="{base_url}showthread.php?t={thread_id}#post{post_id}" ' \
+                        'rel="nofollow" id="postcount{post_id}"' \
+                        'name="{post_index}"><strong>{post_index}</strong></a></td>\n' \
+                        '       </tr>\n' \
+                        '       <tr valign="top">\n' \
+                        '           <td class="alt2" rowspan="2" style="border: 1px solid #D1D1D1; ' \
+                        'border-top: 0px; border-bottom: 0px" width="175"><div id="postmenu_{post_id}">' \
+                        '<a class="bigusername" href="member.php?u={user_id}">{user_name}</a></div>' \
+                        '<div class="smallfont">&nbsp;<br><a href="member.php?u={user_id}">' \
+                        '<img id="fcterremoto" class="avatar" ' \
+                        'src="{avatar_url}" ' \
+                        'alt="Avatar de {user_name}" title="Avatar de {user_name}" ' \
+                        'width="120" height="68" border="0"></a></div></td>\n' \
+                        '{message_text}' \
+                        '       </tr>\n' \
+                        '   </tbody>\n' \
+                        '</table>'
+
+
+def fix_quotes_links(message):
+    return re.sub('<a href="showthread\.php\?p=[0-9]+#post', '<a href="#post', message)
+
+
+def write_message_to_thread_file(thread_file, thread_id, message_id, message):
+    fixed_message = fix_quotes_links(message['text'])
+    message = full_message_template.format(
+        base_url=vbulletin_session.config['VBULLETIN']['base_url'],
+        anchor_name=message_id,
+        post_id=message_id,
+        post_date=message['date'],
+        thread_id=thread_id,
+        post_index=message['index'],
+        user_id=message['author']['id'],
+        user_name=message['author']['username'],
+        avatar_url=message['author']['avatar'],
+        message_text=fixed_message
+    )
+    write_str_to_thread_file(thread_file=thread_file, table_str=message)
+
+
 def write_str_to_thread_file(thread_file, table_str, retries=10):
     if retries > 0:
         try:
@@ -102,7 +164,8 @@ def write_str_to_thread_file(thread_file, table_str, retries=10):
             if UniErr.reason == 'surrogates not allowed':
                 # problema con codificación de emojis
                 table_str_2 = table_str.encode('utf-8', errors='surrogatepass')
-                return write_str_to_thread_file(thread_file, str(table_str_2, encoding='utf-8', errors='ignore'), retries - 1)
+                return write_str_to_thread_file(thread_file, str(table_str_2, encoding='utf-8', errors='ignore'),
+                                                retries - 1)
         except Exception as err:
             print(str(err))
     return False

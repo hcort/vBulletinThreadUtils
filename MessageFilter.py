@@ -24,6 +24,8 @@ class MessageFilterByAuthor(MessageFilter):
         self.__author = author
 
     def filter_message(self, post_id: str, message: dict) -> bool:
+        if not self.__author:
+            return True
         if self.__author == '@OP':
             return message.get('author', {}).get('is_op', '')
         else:

@@ -1,7 +1,9 @@
-import os
+"""
+    Class VBulletinThreadParser is used to parse a thread and store it back as a local HTML file
+
+"""
 import re
 from urllib.parse import urlparse
-from slugify import slugify
 
 import requests
 from bs4 import BeautifulSoup
