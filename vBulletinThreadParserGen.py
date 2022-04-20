@@ -3,8 +3,10 @@ import datetime
 import locale
 
 import requests
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup
 
+import MessageFilter
+from html2bbcode import parse_children_in_node
 from vBulletinSession import vbulletin_session
 
 
@@ -13,8 +15,8 @@ def find_user_messages_in_thread_list(links, username):
     for idx, thread_item in enumerate(links):
         print('[' + str(idx) + '/' + str(num_links) + '] - ' + str(thread_item))
         # thread_name = link['title']
-        thread_parser = VBulletinThreadParserGEN(thread_item, username)
-        author_matches = thread_parser.parse_thread()
+        thread_parser = VBulletinThreadParserGEN(thread_item)
+        author_matches = thread_parser.parse_thread(filter_obj=MessageFilter.MessageFilterByAuthor(username))
         thread_item['matches'] = author_matches
 
 
@@ -46,21 +48,13 @@ def get_next_url(soup):
     return ''
 
 
-def parse_quotes(post_text_start):
-    # div > div.smallfont                                     Cita:
-    # div > table > tr > td.alt2 > div: nth - child(1)        Cita de...
-    # div > table > tr > td.alt2 > div: nth - child(1) > a    Link al perfil
-    # div > table > tr > td.alt2 > div: nth - child(2)        Contenido de la cita
-    pass
-
-
 def get_post_text(table):
     post_text_start = table.select_one(post_text_selector)
     # post_text = post_text_start.decode_contents() if post_text_start else ''
-    for child in post_text_start.children:
-        if type(child) is Tag:
-            print(child)
-    post_text = post_text_start.prettify(formatter="minimal") if post_text_start else ''
+    if vbulletin_session.config['VBULLETIN']['output_format'] == 'BBCode':
+        post_text = parse_children_in_node(post_text_start)
+    else:
+        post_text = post_text_start.prettify(formatter="minimal") if post_text_start else ''
     return post_text
 
 
@@ -103,15 +97,41 @@ def get_user_avatar(table):
     return user_avatar.get('src', '') if user_avatar else ''
 
 
+def parse_post_table(post_id, table):
+    post_date = get_post_date(table)
+    post_index, post_link = get_post_index_and_link(table)
+    user_id, user_name = get_user_id_and_name(table, post_id)
+    # TODO extra user info, not handled right now
+    # user_extra_info = table.select_one('tr:nth-child(2) > td.alt2 > div.smallfont:nth-of-type(2)')
+    # user_reg_date = table.select_one(user_registration_date_selector)
+    # user_location = table.select_one(user_location_selector)
+    # user_car_info = table.select_one(user_car_info_selector)
+    # table class = tborder-author
+    print('Read post #' + post_index)
+    return {
+        'author': {
+            'id': user_id,
+            'username': user_name,
+            'is_op': 'tborder-author' in table.attrs.get('class', []),
+            'avatar': get_user_avatar(table),
+            # TODO add user_extra_info, user_reg_date, user_location, user_car_info
+        },
+        'index': post_index,
+        'date': post_date,
+        'link': post_link,
+        'title': get_post_title(table),
+        'text': get_post_text(table)
+    }
+
+
 class VBulletinThreadParserGEN:
 
-    def __init__(self, thread_item, username_filter=''):
+    def __init__(self, thread_item):
         self.__thread_info = thread_item
-        self.__username = username_filter
         self.__first_post_id = ''
         self.__parsed_messages = {}
 
-    def parse_thread(self):
+    def parse_thread(self, filter_obj: MessageFilter = None):
         if not vbulletin_session.session:
             return -1
         current_url = self.__thread_info['url']
@@ -123,41 +143,14 @@ class VBulletinThreadParserGEN:
             soup = BeautifulSoup(current_page.text, features="html.parser")
             all_posts_table = soup.select('div[id^="edit"] > table[id^="post"]')
             for table in all_posts_table:
-                post_id = self.__parse_post_table(table)
+                post_id = table.get('id', '')[-9:]
+                post_dict = parse_post_table(post_id, table)
+                if post_dict and filter_obj and (filter_obj.filter_message(post_id, post_dict)):
+                    self.__parsed_messages[post_id] = post_dict
                 if not self.__first_post_id:
                     self.__first_post_id = post_id
-                    if self.__username == '@OP':
-                        self.__username = self.__parsed_messages[self.__first_post_id]['author']['username']
+                    self.__thread_info['title'] = post_dict.get('title')
+                    self.__thread_info['author'] = post_dict.get('author', []).get('username')
+                    self.__thread_info['author_id'] = post_dict.get('author', []).get('id', [])
             current_url = get_next_url(soup)
-        if self.__first_post_id:
-            self.__thread_info['title'] = self.__parsed_messages[self.__first_post_id]['title']
-            self.__thread_info['author'] = self.__parsed_messages[self.__first_post_id]['author']['username']
-            self.__thread_info['author_id'] = self.__parsed_messages[self.__first_post_id]['author']['id']
         return self.__parsed_messages
-
-    def __parse_post_table(self, table):
-        post_id = table.get('id', '')[-9:]
-        post_date = get_post_date(table)
-        post_index, post_link = get_post_index_and_link(table)
-        user_id, user_name = get_user_id_and_name(table, post_id)
-        # TODO extra user info, not handled right now
-        # user_extra_info = table.select_one('tr:nth-child(2) > td.alt2 > div.smallfont:nth-of-type(2)')
-        # user_reg_date = table.select_one(user_registration_date_selector)
-        # user_location = table.select_one(user_location_selector)
-        # user_car_info = table.select_one(user_car_info_selector)
-        # TODO better filtering
-        if (not self.__username) or (self.__username == user_name):
-            self.__parsed_messages[post_id] = {
-                'author': {
-                    'id': user_id,
-                    'username': user_name,
-                    'avatar': get_user_avatar(table),
-                },
-                'index': post_index,
-                'date': post_date,
-                'link': post_link,
-                'title': get_post_title(table),
-                'text': get_post_text(table)
-            }
-        print('Read post #' + post_index)
-        return post_id
