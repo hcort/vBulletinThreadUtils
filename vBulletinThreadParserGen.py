@@ -52,14 +52,9 @@ def get_next_url(soup):
         return vbulletin_session.config['VBULLETIN']['base_url'] + next_link.get('href', '')
 
 
-def get_post_text(table):
-    post_text_start = table.select_one(post_text_selector)
-    # post_text = post_text_start.decode_contents() if post_text_start else ''
-    if vbulletin_session.config['VBULLETIN'].get('output_format') == 'BBCode':
-        post_text = parse_children_in_node(post_text_start)
-    else:
-        post_text = post_text_start.prettify(formatter="minimal") if post_text_start else ''
-    return post_text
+def get_post_HTML(table):
+    return table.select_one(post_text_selector)
+    # if vbulletin_session.config['VBULLETIN'].get('output_format') == 'BBCode':
 
 
 def get_post_date(table):
@@ -122,7 +117,7 @@ def parse_post_table(post_id, table):
         'date': post_date,
         'link': post_link,
         'title': get_post_title(table),
-        'text': get_post_text(table)
+        'HTML': get_post_HTML(table)
     }
 
 
@@ -137,6 +132,23 @@ def get_last_page(soup):
     return ''
 
 
+def update_progress_bar(progress, last_page_found, soup):
+    if not last_page_found:
+        last_page = get_last_page(soup)
+        progress.total = int(last_page)
+    progress.update()
+    return True
+
+
+def update_thread_info(first_post_found, post_id, thread_info, post_dict):
+    if not first_post_found:
+        thread_info['first_post_id'] = post_id
+        thread_info['title'] = post_dict.get('title')
+        thread_info['author'] = post_dict.get('author', []).get('username')
+        thread_info['author_id'] = post_dict.get('author', []).get('id', [])
+    return True
+
+
 def parse_thread(thread_info: dict, filter_obj: MessageFilter = None):
     if not vbulletin_session.session:
         return -1
@@ -144,28 +156,20 @@ def parse_thread(thread_info: dict, filter_obj: MessageFilter = None):
     thread_info['parsed_messages'] = {}
     if not current_url:
         return
-    last_page = ''
+    last_page_found = False
+    first_post_found = False
     with tqdm(position=0, leave=True, desc='Parsing ' + current_url) as progress:
         while current_url:
             current_page = vbulletin_session.session.get(current_url)
-            progress.update()
             if current_page.status_code != requests.codes.ok:
                 break
             soup = BeautifulSoup(current_page.text, features="html.parser")
-            if not last_page:
-                last_page = get_last_page(soup)
-                progress.total = int(last_page)
+            last_page_found = update_progress_bar(progress, last_page_found, soup)
             all_posts_table = soup.select('div[id^="edit"] > table[id^="post"]')
-            first_post_id = ''
             for table in all_posts_table:
                 post_id = table.get('id', '')[-9:]
                 post_dict = parse_post_table(post_id, table)
                 if post_dict and ((not filter_obj) or (filter_obj and (filter_obj.filter_message(post_id, post_dict)))):
                     thread_info['parsed_messages'][post_id] = post_dict
-                if not first_post_id:
-                    first_post_id = post_id
-                    thread_info['first_post_id'] = first_post_id
-                    thread_info['title'] = post_dict.get('title')
-                    thread_info['author'] = post_dict.get('author', []).get('username')
-                    thread_info['author_id'] = post_dict.get('author', []).get('id', [])
+                first_post_found = update_thread_info(first_post_found, post_id, thread_info, post_dict)
             current_url = get_next_url(soup)

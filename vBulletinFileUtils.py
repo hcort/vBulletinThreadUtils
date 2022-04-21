@@ -1,9 +1,11 @@
 import os
 import re
+from urllib.parse import urlparse
 
 import requests
 from slugify import slugify
 
+from MessageProcessor import MessageHTMLToText
 from vBulletinSession import vbulletin_session
 
 
@@ -77,7 +79,7 @@ def save_parse_result_as_file(thread_info):
     thread_messages = thread_info.get('parsed_messages', {})
     if not thread_messages:
         return
-    thread_file = open_thread_file(thread_url=thread_info['url'], thread_id=thread_info['id'],
+    thread_file = open_thread_file(thread_id=thread_info['id'],
                                    thread_name=thread_info['title'])
     for message in thread_messages:
         write_message_to_thread_file(thread_file=thread_file,
@@ -87,10 +89,10 @@ def save_parse_result_as_file(thread_info):
     close_thread_file(thread_file)
 
 
-def open_thread_file(thread_url, thread_id, thread_name):
+def open_thread_file(thread_id, thread_name):
     output_dir = vbulletin_session.config['VBULLETIN'].get('output_dir', '')
-    regex_id = re.compile("t=([0-9]+)")
-    thread_filename = os.path.join(output_dir, thread_id + '.html')
+    file_name = slugify('{}_{}'.format(thread_id, thread_name), max_length=250) if thread_name else thread_id
+    thread_filename = os.path.join(output_dir, file_name + '.html')
     if os.path.exists(thread_filename):
         os.remove(thread_filename)
     # 'iso-8859-1', 'cp1252'
@@ -121,8 +123,8 @@ full_message_template = '<table id="post{post_id}" class="tborder-author" style=
                         '       <tr valign="top">\n' \
                         '           <td class="alt2" rowspan="2" style="border: 1px solid #D1D1D1; ' \
                         'border-top: 0px; border-bottom: 0px" width="175"><div id="postmenu_{post_id}">' \
-                        '<a class="bigusername" href="member.php?u={user_id}">{user_name}</a></div>' \
-                        '<div class="smallfont">&nbsp;<br><a href="member.php?u={user_id}">' \
+                        '<a class="bigusername" href="{base_url}member.php?u={user_id}">{user_name}</a></div>' \
+                        '<div class="smallfont">&nbsp;<br><a href="{base_url}member.php?u={user_id}">' \
                         '<img id="fcterremoto" class="avatar" ' \
                         'src="{avatar_url}" ' \
                         'alt="Avatar de {user_name}" title="Avatar de {user_name}" ' \
@@ -132,13 +134,56 @@ full_message_template = '<table id="post{post_id}" class="tborder-author" style=
                         '   </tbody>\n' \
                         '</table>'
 
+regex_post_id = re.compile("#post([0-9]+)")
+regex_link_to_thread = re.compile("showthread\.php\?t=([0-9]+)")
+regex_link_to_message = re.compile("showthread\.php\?p=([0-9]+)")
+regex_link_to_profile = re.compile("member\.php\?u=([0-9]+)")
 
-def fix_quotes_links(message):
-    return re.sub('<a href="showthread\.php\?p=[0-9]+#post', '<a href="#post', message)
+
+def fix_links_to_this_thread(thread_id, message):
+    all_thread_links = message['HTML'].find_all('a', {'href': regex_link_to_thread}, recursive=True)
+    for link in all_thread_links:
+        href_val = link.attrs.get('href', '')
+        m = regex_link_to_thread.search(href_val)
+        if m and (m.group(1) == thread_id):
+            post_id = regex_post_id.search(href_val)
+            link.attrs['href'] = '#post{}'.format(post_id.group(1) if post_id else href_val)
+        elif not urlparse(href_val).netloc:
+            link.attrs['href'] = vbulletin_session.config['VBULLETIN']['base_url'] + href_val
+
+
+def fix_links_to_posts_in_this_thread(message):
+    all_posts_links = message['HTML'].find_all('a', {'href': regex_link_to_message}, recursive=True)
+    for link in all_posts_links:
+        post_id = regex_post_id.search(link.attrs.get('href', ''))
+        if post_id:
+            link.attrs['href'] = '#post{}'.format(post_id.group(1))
+
+
+def fix_links_to_user_profiles(message):
+    all_user_profiles = message['HTML'].find_all('a', {'href': regex_link_to_profile}, recursive=True)
+    for link in all_user_profiles:
+        if not urlparse(link.attrs.get('href', '')).netloc:
+            link.attrs['href'] = vbulletin_session.confg['VBULLETIN']['base_url'] + link.attrs.get('href', '')
+
+
+def fix_quotes_links(thread_id, message):
+    if not message.get('HTML'):
+        return
+    """
+        Takes links to this thread and convert them to anchor links so 
+        I can navigate the thread totally offline.
+        Fixes relative links to include the forum base URL
+    """
+    fix_links_to_this_thread(thread_id, message)
+    fix_links_to_posts_in_this_thread(message)
+    fix_links_to_user_profiles(message)
+    html2text = MessageHTMLToText()
+    return html2text.process_message(post_id='', message=message)
 
 
 def write_message_to_thread_file(thread_file, thread_id, message_id, message):
-    fixed_message = fix_quotes_links(message['text'])
+    fixed_message = fix_quotes_links(thread_id, message)
     message = full_message_template.format(
         base_url=vbulletin_session.config['VBULLETIN']['base_url'],
         anchor_name=message_id,
