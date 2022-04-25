@@ -1,7 +1,7 @@
 import configparser
 import os
 
-from vBulletinLogin import VBulletinLogin
+from vBulletinLoginSelenium import VBulletinLogin
 
 
 class VBulletinSession:

@@ -122,20 +122,19 @@ def parse_post_table(post_id, table):
 
 
 def get_last_page(soup):
-    last_link = soup.select_one('td a.smallfont strong')
-    if last_link:
-        parent_link = last_link.parent.attrs.get('href', '')
-        regex_id = re.compile("page=([0-9]+)")
-        m = regex_id.search(parent_link)
-        if m:
-            return m.group(1)
-    return ''
+    last_or_next_link = soup.select_one('td:nth-last-child(2).alt1 > a')
+    if last_or_next_link.text == '>':
+        last_or_next_link = soup.select_one('td:nth-last-child(3).alt1 > a')
+    regex_id = re.compile("page=([0-9]+)")
+    m = regex_id.search(last_or_next_link.attrs.get('href', ''))
+    return m.group(1) if m else ''
 
 
 def update_progress_bar(progress, last_page_found, soup):
     if not last_page_found:
         last_page = get_last_page(soup)
-        progress.total = int(last_page)
+        if last_page:
+            progress.total = int(last_page)
     progress.update()
     return True
 

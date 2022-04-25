@@ -95,8 +95,7 @@ def open_thread_file(thread_id, thread_name):
     thread_filename = os.path.join(output_dir, file_name + '.html')
     if os.path.exists(thread_filename):
         os.remove(thread_filename)
-    # 'iso-8859-1', 'cp1252'
-    thread_file = open(thread_filename, "a+", encoding='latin-1')
+    thread_file = open(thread_filename, "a+", encoding='utf-8')
     for line in open(os.path.join('resources', "page_header.txt"), "r"):
         if line.startswith('<meta name="description"'):
             thread_file.write(
@@ -182,6 +181,18 @@ def fix_quotes_links(thread_id, message):
     return html2text.process_message(post_id='', message=message)
 
 
+def save_all_images_in_message(message):
+    # FIXME
+    if vbulletin_session.config['VBULLETIN'].get('save_images', '') == 'True':
+        all_imgs = message.find_all('img', recursive=True)
+        for img in all_imgs:
+            src_txt = img['src']
+            if not img.get('src_old', None):
+                # some nodes are parsed more than once (!) hack to detect this
+                img['src'] = save_image(src_txt)
+                img['src_old'] = src_txt
+
+
 def write_message_to_thread_file(thread_file, thread_id, message_id, message):
     fixed_message = fix_quotes_links(thread_id, message)
     message = full_message_template.format(
@@ -205,12 +216,13 @@ def write_str_to_thread_file(thread_file, table_str, retries=10):
             thread_file.write(table_str)
             return True
         except UnicodeEncodeError as UniErr:
-            # print(str(UniErr))
             if UniErr.reason == 'surrogates not allowed':
                 # problema con codificación de emojis
                 table_str_2 = table_str.encode('utf-8', errors='surrogatepass')
-                return write_str_to_thread_file(thread_file, str(table_str_2, encoding='utf-8', errors='ignore'),
-                                                retries - 1)
+            else:
+                table_str_2 = table_str.encode('utf-8', errors='backlashreplace')
+            return write_str_to_thread_file(thread_file, str(table_str_2, encoding='utf-8', errors='ignore'),
+                                            retries - 1)
         except Exception as err:
             print(str(err))
     return False

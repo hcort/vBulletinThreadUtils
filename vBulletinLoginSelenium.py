@@ -7,6 +7,10 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 
+def VBulletinLogin(login_url='', login_data={}):
+    return VBulletinLoginSelenium(login_url=login_url, login_data=login_data)
+
+
 def VBulletinLoginSelenium(login_url='', login_data=None):
     if not login_url or not login_data:
         return None
