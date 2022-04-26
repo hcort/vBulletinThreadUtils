@@ -13,7 +13,7 @@ from vBulletinFileUtils import save_parse_result_as_file
 from vBulletinSession import vbulletin_session
 
 
-def find_user_messages_in_thread_list(links, username):
+def find_user_messages_in_thread_list(links, username, thread_index_file=''):
     num_links = len(links)
     for idx, thread_item in enumerate(links):
         print('\n[' + str(idx+1) + '/' + str(num_links) + '] - ' + str(thread_item))
@@ -24,7 +24,7 @@ def find_user_messages_in_thread_list(links, username):
             parse_thread(thread_info=thread_item, filter_obj=None)
         # save results
         if vbulletin_session.config['VBULLETIN'].get('output_format', '') != 'BBCode':
-            save_parse_result_as_file(thread_item)
+            save_parse_result_as_file(thread_item, thread_index_file=thread_index_file)
 
 
 page_nav_bar_selector = 'body > div:nth-child(14) > div:nth-child(1) > div:nth-child(1) > table:nth-of-type(4) ' \

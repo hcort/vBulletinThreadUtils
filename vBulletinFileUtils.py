@@ -3,16 +3,20 @@ import re
 from urllib.parse import urlparse
 
 import requests
+from bs4 import BeautifulSoup
 from slugify import slugify
 
 from MessageProcessor import MessageHTMLToText
 from vBulletinSession import vbulletin_session
 
 
-def open_index_file():
-    # FIXME buscar manera de crear un indice individual
+def open_index_file(search_id=''):
     output_dir = vbulletin_session.config['VBULLETIN'].get('output_dir', '')
-    filename = os.path.join(output_dir, 'index.html')
+    if search_id:
+        filename = 'search_{}.html'.format(search_id)
+    else:
+        filename = 'index.html'
+    filename = os.path.join(output_dir, filename)
     if os.path.exists(filename):
         os.remove(filename)
     # 'iso-8859-1', 'cp1252'
@@ -22,26 +26,70 @@ def open_index_file():
     return index_file
 
 
+def create_saved_threads_file(filename):
+    if not os.path.exists(filename):
+        index_file = open(filename, "a+", encoding='utf-8')
+        for line in open(os.path.join('resources', 'search_index_header.txt'), "r"):
+            index_file.write(line)
+        index_file.write('</table></body></html>')
+        index_file.close()
+
+
+def build_table_entry(num_link, thread_info, thread_file_name):
+    with open(os.path.join('resources', 'index_file_entry_pattern.txt'), 'r') as pattern_file:
+        entry_pattern = pattern_file.read()
+        return entry_pattern.format(id=thread_info['id'], idx_link=num_link, url=thread_info['url'],
+                                    title=thread_info['title'],
+                                    hover=thread_info['hover'], author=thread_info['author'],
+                                    url_base=vbulletin_session.config['VBULLETIN']['base_url'],
+                                    author_id=thread_info['author_id'],
+                                    author_matches=len(thread_info['parsed_messages']),
+                                    thread_file_name=thread_file_name)
+
+
+def insert_thread_saved_threads_file(filename, thread_info, thread_file_name):
+    soup = BeautifulSoup(open(filename, "r", encoding='utf-8'), features="html.parser")
+    results_table = soup.select_one('table.tborder')
+    updated_row = soup.select_one('tr#tr_thread_{}'.format(thread_info['id']))
+    if updated_row:
+        num_link = int(updated_row.select_one('td#thread_{}_idx'.format(thread_info['id'])).text)
+        last_message_count = int(re.compile("([0-9]+) mensajes").search(
+            updated_row.select_one('div#thread_{}_msgcnt'.format(thread_info['id'])).text).group(1))
+    else:
+        num_link = len(results_table.select('tr[id^=tr_thread_]')) + 1
+        last_message_count = 0
+    if not updated_row or (last_message_count != len(thread_info['parsed_messages'])):
+        table_entry = build_table_entry(num_link, thread_info, thread_file_name)
+        table_entry_soup = BeautifulSoup(table_entry, features="html.parser")
+        if not updated_row:
+            results_table.append(table_entry_soup)
+        else:
+            updated_row.insert_after(table_entry_soup)
+            updated_row.decompose()
+        with open(filename, "w", encoding='utf-8') as new_file:
+            new_file.write(str(soup))
+
+
+def update_saved_threads_page(thread_info, thread_file_name, thread_index_file=''):
+    output_dir = vbulletin_session.config['VBULLETIN'].get('output_dir', '')
+    if not thread_index_file:
+        filename = os.path.join(output_dir, 'saved_threads.html')
+    else:
+        filename = os.path.join(output_dir, thread_index_file)
+    create_saved_threads_file(filename)
+    insert_thread_saved_threads_file(filename, thread_info, thread_file_name)
+
+
 def save_search_results_as_index_page(links):
-    with open(os.path.join('resources', 'index_file_entry_patter.txt'), 'r') as file:
-        entry_pattern = file.read()
-    index_file = open_index_file()
+    index_file = open_index_file(links.get('search_id', ''))
     for idx, link in enumerate(links):
-        link_pattern = entry_pattern
-        link_pattern = link_pattern.replace('{idx_link}', str(idx))
-        link_pattern = link_pattern.replace('{id}', link['id'])
-        link_pattern = link_pattern.replace('{url}', link['url'])
-        link_pattern = link_pattern.replace('{title}', link['title'])
-        link_pattern = link_pattern.replace('{hover}', link['hover'])
-        link_pattern = link_pattern.replace('{author}', link['author'])
-        link_pattern = link_pattern.replace('{author_id}', link['author_id'])
-        link_pattern = link_pattern.replace('{author_matches}', str(link['matches']))
+        link_pattern = build_table_entry(idx, link, thread_file_name='')
         index_file.write(link_pattern)
     index_file.write('</table></body></html>')
     index_file.close()
 
 
-def save_image(src_txt, output_dir='', server_root=''):
+def save_image(src_txt):
     output_dir = vbulletin_session.config['VBULLETIN'].get('output_dir', '')
     server_root = vbulletin_session.config['VBULLETIN'].get('http_server_root', output_dir)
     img_filename = slugify(src_txt, max_length=250)
@@ -75,11 +123,13 @@ def save_image(src_txt, output_dir='', server_root=''):
     return src_txt
 
 
-def save_parse_result_as_file(thread_info):
+def save_parse_result_as_file(thread_info, thread_index_file=''):
     thread_messages = thread_info.get('parsed_messages', {})
     if not thread_messages:
         return
-    thread_file = open_thread_file(thread_id=thread_info['id'],
+    thread_file_name = get_thread_file_name(thread_id=thread_info['id'],
+                                            thread_name=thread_info['title'])
+    thread_file = open_thread_file(thread_filename=thread_file_name,
                                    thread_name=thread_info['title'])
     for message in thread_messages:
         write_message_to_thread_file(thread_file=thread_file,
@@ -87,15 +137,19 @@ def save_parse_result_as_file(thread_info):
                                      message_id=message,
                                      message=thread_messages[message])
     close_thread_file(thread_file)
+    update_saved_threads_page(thread_info, thread_file_name, thread_index_file)
 
 
-def open_thread_file(thread_id, thread_name):
-    output_dir = vbulletin_session.config['VBULLETIN'].get('output_dir', '')
+def get_thread_file_name(thread_id, thread_name):
     file_name = slugify('{}_{}'.format(thread_id, thread_name), max_length=250) if thread_name else thread_id
-    thread_filename = os.path.join(output_dir, file_name + '.html')
-    if os.path.exists(thread_filename):
-        os.remove(thread_filename)
-    thread_file = open(thread_filename, "a+", encoding='utf-8')
+    return file_name + '.html'
+
+
+def open_thread_file(thread_filename, thread_name):
+    thread_file = open(
+        os.path.join(
+            vbulletin_session.config['VBULLETIN'].get('output_dir', ''),
+            thread_filename), "a+", encoding='utf-8')
     for line in open(os.path.join('resources', "page_header.txt"), "r"):
         if line.startswith('<meta name="description"'):
             thread_file.write(
@@ -134,7 +188,7 @@ full_message_template = '<table id="post{post_id}" class="tborder-author" style=
                         '</table>'
 
 regex_post_id = re.compile("#post([0-9]+)")
-regex_link_to_thread = re.compile("showthread\.php\?t=([0-9]+)")
+regex_link_to_thread = re.compile('showthread\.php\?t=([0-9]+)')
 regex_link_to_message = re.compile("showthread\.php\?p=([0-9]+)")
 regex_link_to_profile = re.compile("member\.php\?u=([0-9]+)")
 

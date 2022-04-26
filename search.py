@@ -41,8 +41,9 @@ def main():
     link_list = create_link_list()
 
     if operation_mode == 'SEARCHTHREADS':
-        find_user_messages_in_thread_list(link_list, filter_usr)
-        save_search_results_as_index_page(link_list)
+        # link list should be a dict link_list{'search_id', 'links'}
+        index_file = 'search_{}_index.html'.format(link_list.get('search_id', ''))
+        find_user_messages_in_thread_list(link_list['links'], filter_usr, thread_index_file=index_file)
     elif operation_mode == 'TIMESTAMP':
         find_user_message_timestamp(link_list, filter_usr)
     elif operation_mode == 'WORDCLOUD':
