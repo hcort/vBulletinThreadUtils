@@ -39,6 +39,8 @@ def main():
     filter_usr = vbulletin_session.config['FILTERUSER'].get('username', '')
 
     link_list = create_link_list()
+    if not link_list:
+        return
 
     if operation_mode == 'SEARCHTHREADS':
         # link list should be a dict link_list{'search_id', 'links'}

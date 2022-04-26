@@ -171,4 +171,5 @@ def parse_thread(thread_info: dict, filter_obj: MessageFilter = None):
                 if post_dict and ((not filter_obj) or (filter_obj and (filter_obj.filter_message(post_id, post_dict)))):
                     thread_info['parsed_messages'][post_id] = post_dict
                 first_post_found = update_thread_info(first_post_found, post_id, thread_info, post_dict)
-            current_url = get_next_url(soup)
+            next_url = get_next_url(soup)
+            current_url = next_url if current_url != next_url else ''
