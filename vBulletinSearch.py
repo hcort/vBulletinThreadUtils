@@ -29,9 +29,11 @@ def get_links(base_url, soup, search_query='', strict_search=False):
     all_threads_table = soup.select('td[id^="td_threadtitle_"] > div > a[id^="thread_title_"]')
     all_threads_authors = soup.select('td[id^="td_threadtitle_"] > div.smallfont')
     for link in zip(all_threads_table, all_threads_authors):
-        thread_id_m = re_author_from_link.search(link[0].attrs.get('id', ''))
-        author_id_m = re_thread_id_from_link.search(link[1].attrs.get('onclick', ''))
+        thread_id_m = re_thread_id_from_link.search(link[0].attrs.get('id', ''))
+        author_id_m = re_author_from_link.search(str(link[1]))
         thread_id = thread_id_m.group(1) if thread_id_m else ''
+        if not thread_id and not author_id_m:
+            continue
         if (not strict_search) or (strict_search and (link[0].text.lower().find(search_query.lower()) >= 0)):
             links.append(
                 {
@@ -39,10 +41,16 @@ def get_links(base_url, soup, search_query='', strict_search=False):
                     'url': base_url + 'showthread.php?t=' + thread_id,
                     'title': link[0].text,
                     'hover': link[0].attrs.get('title', ''),
-                    'author': link[1].text,
+                    'author': link[1].text.strip(),
                     'author_id': author_id_m.group(1) if author_id_m else ''
                 })
     return links
+
+
+def get_search_id(driver):
+    regex_thread_id = re.compile("searchid=([0-9]+)")
+    search_id = regex_thread_id.search(driver.current_url)
+    return search_id.group(1) if search_id else ''
 
 
 def loop_search_results(driver, start_url):
@@ -52,12 +60,13 @@ def loop_search_results(driver, start_url):
     base_url = vbulletin_session.config['VBULLETIN']['base_url']
     search_query = vbulletin_session.config['SEARCHTHREADS'].get('search_words', '')
     strict_search = vbulletin_session.config['SEARCHTHREADS'].get('strict_search', False)
-    links = []
+    search_result = {'links': []}
     while current_url:
         if first_search:
             # source = driver.execute_script("return document.body.innerHTML;")
             source = driver.page_source
             search_soup = BeautifulSoup(source, features="html.parser")
+            search_result['search_id'] = get_search_id(driver)
             first_search = False
         else:
             driver.get(current_url)
@@ -67,10 +76,10 @@ def loop_search_results(driver, start_url):
             source = driver.page_source
             search_soup = BeautifulSoup(source, features="html.parser")
         if search_soup:
-            links += get_links(base_url=base_url, soup=search_soup,
-                               search_query=search_query, strict_search=strict_search)
+            search_result['links'] += get_links(base_url=base_url, soup=search_soup,
+                                                search_query=search_query, strict_search=strict_search)
             current_url = find_next(search_soup)
-    return links
+    return search_result
 
 
 def fill_search_form(driver):
@@ -120,6 +129,7 @@ def search_selenium():
     base_url = vbulletin_session.config['VBULLETIN']['base_url']
     search_url = base_url + 'search.php?do=process'
     driver = webdriver.Firefox()
+    search_result = None
     try:
         import_cookies_from_session(driver)
         driver.get(search_url)
@@ -127,14 +137,14 @@ def search_selenium():
         fill_search_form(driver)
         element_present = EC.presence_of_element_located((By.ID, 'threadslist'))
         WebDriverWait(driver, timeout=1000).until(element_present)
-        links = loop_search_results(driver, start_url=search_url)
+        search_result = loop_search_results(driver, start_url=search_url)
     except TimeoutException as ex:
         print('Error accessing {}: Timeout: {}'.format(search_url, str(ex)))
     except Exception as ex:
         print('Error accessing {}: Timeout: {}'.format(search_url, str(ex)))
     finally:
         driver.close()
-    return links
+    return search_result
 
 
 def start_searching():
