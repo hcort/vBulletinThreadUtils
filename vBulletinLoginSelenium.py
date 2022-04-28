@@ -7,6 +7,17 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 
+def create_session_object():
+    headers = {
+        "User-Agent":
+            "Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/44.0.2403.157 "
+            "Safari/537.36 "
+    }
+    s = requests.session()
+    s.headers.update(headers)
+    return s
+
+
 def VBulletinLogin(login_url='', login_data={}):
     return VBulletinLoginSelenium(login_url=login_url, login_data=login_data)
 
@@ -29,14 +40,7 @@ def VBulletinLoginSelenium(login_url='', login_data=None):
         timeout = 100
         element_present = EC.presence_of_element_located((By.LINK_TEXT, login_data.get('vb_login_username', '')))
         WebDriverWait(driver, timeout).until(element_present)
-        headers = {
-            "User-Agent":
-                "Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/44.0.2403.157 "
-                "Safari/537.36 "
-        }
-        s = requests.session()
-        s.headers.update(headers)
-
+        s = create_session_object()
         for cookie in driver.get_cookies():
             c = {cookie['name']: cookie['value']}
             s.cookies.update(c)
