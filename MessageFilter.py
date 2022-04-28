@@ -7,7 +7,7 @@ class MessageFilter(object):
 
         usage:
 
-        if filter_object.filter_message(message):
+        if filter_object and filter_object.filter_message(message):
             message_collection[message_id] = message
     """
 
@@ -24,6 +24,11 @@ class MessageFilterByAuthor(MessageFilter):
         self.__author = author
 
     def filter_message(self, post_id: str, message: dict) -> bool:
+        """
+        :return: True if the message has been posted by certain author
+
+            author is filtered by user name, not user id
+        """
         if not self.__author:
             return True
         if self.__author == '@OP':

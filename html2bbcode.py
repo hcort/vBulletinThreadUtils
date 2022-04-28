@@ -77,7 +77,7 @@ def parseHTMLnode(child):
     child_text = parse_children_in_node(child)
     if child_text:
         return child_text
-    print('++++++++Non parsed child: ' + str(child))
+    # print('++++++++Non parsed child: ' + str(child))
     return str(child)
 
 

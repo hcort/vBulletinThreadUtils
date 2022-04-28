@@ -3,7 +3,7 @@ import re
 from urllib.parse import urlparse
 
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 from slugify import slugify
 
 from MessageProcessor import MessageHTMLToText
@@ -11,7 +11,7 @@ from vBulletinSession import vbulletin_session
 
 
 def open_index_file(search_id=''):
-    output_dir = vbulletin_session.config['VBULLETIN'].get('output_dir', '')
+    output_dir = vbulletin_session.output_dir
     if search_id:
         filename = 'search_{}.html'.format(search_id)
     else:
@@ -71,7 +71,7 @@ def insert_thread_saved_threads_file(filename, thread_info, thread_file_name):
 
 
 def update_saved_threads_page(thread_info, thread_file_name, thread_index_file=''):
-    output_dir = vbulletin_session.config['VBULLETIN'].get('output_dir', '')
+    output_dir = vbulletin_session.output_dir
     if not thread_index_file:
         filename = os.path.join(output_dir, 'saved_threads.html')
     else:
@@ -90,7 +90,7 @@ def save_search_results_as_index_page(links):
 
 
 def save_image(src_txt):
-    output_dir = vbulletin_session.config['VBULLETIN'].get('output_dir', '')
+    output_dir = vbulletin_session.output_dir
     server_root = vbulletin_session.config['VBULLETIN'].get('http_server_root', output_dir)
     img_filename = slugify(src_txt, max_length=250)
     image_path = os.path.join(output_dir, 'imgs', img_filename)
@@ -123,7 +123,7 @@ def save_image(src_txt):
     return src_txt
 
 
-def save_parse_result_as_file(thread_info, thread_index_file=''):
+def save_parse_result_as_file(thread_info, save_to_index=False, thread_index_file=''):
     thread_messages = thread_info.get('parsed_messages', {})
     if not thread_messages:
         return
@@ -137,7 +137,8 @@ def save_parse_result_as_file(thread_info, thread_index_file=''):
                                      message_id=message,
                                      message=thread_messages[message])
     close_thread_file(thread_file)
-    update_saved_threads_page(thread_info, thread_file_name, thread_index_file)
+    if save_to_index:
+        update_saved_threads_page(thread_info, thread_file_name, thread_index_file)
 
 
 def get_thread_file_name(thread_id, thread_name):
@@ -148,7 +149,7 @@ def get_thread_file_name(thread_id, thread_name):
 def open_thread_file(thread_filename, thread_name):
     thread_file = open(
         os.path.join(
-            vbulletin_session.config['VBULLETIN'].get('output_dir', ''),
+            vbulletin_session.output_dir,
             thread_filename), "a+", encoding='utf-8')
     for line in open(os.path.join('resources', "page_header.txt"), "r"):
         if line.startswith('<meta name="description"'):
@@ -193,8 +194,8 @@ regex_link_to_message = re.compile("showthread\.php\?p=([0-9]+)")
 regex_link_to_profile = re.compile("member\.php\?u=([0-9]+)")
 
 
-def fix_links_to_this_thread(thread_id, message):
-    all_thread_links = message['HTML'].find_all('a', {'href': regex_link_to_thread}, recursive=True)
+def fix_links_to_this_thread(thread_id, html_node):
+    all_thread_links = html_node.find_all('a', {'href': regex_link_to_thread}, recursive=True)
     for link in all_thread_links:
         href_val = link.attrs.get('href', '')
         m = regex_link_to_thread.search(href_val)
@@ -205,34 +206,36 @@ def fix_links_to_this_thread(thread_id, message):
             link.attrs['href'] = vbulletin_session.config['VBULLETIN']['base_url'] + href_val
 
 
-def fix_links_to_posts_in_this_thread(message):
-    all_posts_links = message['HTML'].find_all('a', {'href': regex_link_to_message}, recursive=True)
+def fix_links_to_posts_in_this_thread(html_node):
+    all_posts_links = html_node.find_all('a', {'href': regex_link_to_message}, recursive=True)
     for link in all_posts_links:
         post_id = regex_post_id.search(link.attrs.get('href', ''))
         if post_id:
             link.attrs['href'] = '#post{}'.format(post_id.group(1))
 
 
-def fix_links_to_user_profiles(message):
-    all_user_profiles = message['HTML'].find_all('a', {'href': regex_link_to_profile}, recursive=True)
+def fix_links_to_user_profiles(html_node):
+    all_user_profiles = html_node.find_all('a', {'href': regex_link_to_profile}, recursive=True)
     for link in all_user_profiles:
         if not urlparse(link.attrs.get('href', '')).netloc:
             link.attrs['href'] = vbulletin_session.confg['VBULLETIN']['base_url'] + link.attrs.get('href', '')
 
 
 def fix_quotes_links(thread_id, message):
-    if not message.get('HTML'):
+    mess_content = message.get('message', None)
+    if not mess_content:
         return
     """
         Takes links to this thread and convert them to anchor links so 
         I can navigate the thread totally offline.
         Fixes relative links to include the forum base URL
     """
-    fix_links_to_this_thread(thread_id, message)
-    fix_links_to_posts_in_this_thread(message)
-    fix_links_to_user_profiles(message)
+    html_node = mess_content if (type(mess_content) is Tag) else BeautifulSoup(mess_content, features="html.parser")
+    fix_links_to_this_thread(thread_id, html_node)
+    fix_links_to_posts_in_this_thread(html_node)
+    fix_links_to_user_profiles(html_node)
     html2text = MessageHTMLToText()
-    return html2text.process_message(post_id='', message=message)
+    return html2text.process_message(post_id='', message=html_node)
 
 
 def save_all_images_in_message(message):

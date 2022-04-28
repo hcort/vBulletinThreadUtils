@@ -1,21 +1,8 @@
 from vBulletinSearch import start_searching
 from vBulletinSession import vbulletin_session
 from vBulletinThreadDateParser import find_user_message_timestamp
-from vBulletinThreadParserGen import find_user_messages_in_thread_list
+from vBulletinThreadParserGen import find_user_messages_in_thread_list, thread_id_to_thread_link_dict
 from vBulletinWordCloud import find_user_message_wordcloud
-from vBulletinFileUtils import save_search_results_as_index_page
-
-
-def thread_id_to_thread_link_dict(thread_id):
-    return {
-                'id': thread_id,
-                'url': '{base}/showthread.php?t={thread_id}'.format(
-                    base=vbulletin_session.config['VBULLETIN'].get('base_url', ''), thread_id=thread_id),
-                'title': '',
-                'hover': '',
-                'author': '',
-                'author_id': ''
-            }
 
 
 def create_link_list():
