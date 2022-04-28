@@ -84,12 +84,15 @@ def loop_search_results(driver, start_url):
 
 def fill_search_form(driver):
     # TODO read extra parameters from config
-    subforum_select = Select(driver.find_element(By.NAME, "forumchoice[]"))
-    subforum_select.select_by_value('23')
-    title_only_select = Select(driver.find_element(By.CSS_SELECTOR, "select[name=titleonly]"))
-    title_only_select.select_by_value('1')  # 0: search in msg, 1: search in title
-    thread_starter_select = Select(driver.find_element(By.CSS_SELECTOR, "select[name=starteronly]"))
-    thread_starter_select.select_by_value('1')
+    try:
+        subforum_select = Select(driver.find_element(By.NAME, "forumchoice[]"))
+        subforum_select.select_by_value('23')
+        title_only_select = Select(driver.find_element(By.CSS_SELECTOR, "select[name=titleonly]"))
+        title_only_select.select_by_value('1')  # 0: search in msg, 1: search in title
+        thread_starter_select = Select(driver.find_element(By.CSS_SELECTOR, "select[name=starteronly]"))
+        thread_starter_select.select_by_value('1')
+    except Exception as err:
+        print(str(err))
     minimum_message_field = driver.find_element(By.CSS_SELECTOR, 'div#collapseobj_search_adv table.panel tbody tr '
                                                                  'td:nth-of-type(1) fieldset.fieldset div '
                                                                  'input.bginput')
