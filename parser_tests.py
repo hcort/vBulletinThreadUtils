@@ -31,11 +31,27 @@
     are generating output files
 
 """
-from MessageFilter import MessageFilterByAuthor
-from MessageProcessor import MessageHTMLToBBCode
-from vBulletinFileUtils import save_parse_result_as_file
-from vBulletinSession import vbulletin_session
-from vBulletinThreadParserGen import parse_thread, thread_id_to_thread_link_dict
+import json
+import os
+import pickle
+
+from tqdm import tqdm
+
+from vBulletinThreadUtils.MessageFilter import MessageFilterByAuthor
+from vBulletinThreadUtils.MessageProcessor import MessageHTMLToBBCode, MessageHTMLToText, MessageHTMLToPlainText
+from vBulletinThreadUtils.ProgressVisor import ProgressVisor
+from vBulletinThreadUtils.vBulletinFileUtils import save_parse_result_as_file
+from vBulletinThreadUtils.vBulletinSession import vbulletin_session
+from vBulletinThreadUtils.vBulletinThreadParserGen import parse_thread, thread_id_to_thread_link_dict
+
+
+class ProgressVisorTQDM(ProgressVisor):
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.__tqdm_progress = tqdm(position=0, leave=True, desc=f'Parsing {message}')
+
+    def update(self):
+        self.__tqdm_progress.update()
 
 
 def simple_thread_parsing():
@@ -56,7 +72,8 @@ def simple_thread_parsing():
         index file.
     """
     thread_info = thread_id_to_thread_link_dict('9036759')
-    parse_thread(thread_info=thread_info, filter_obj=None)
+    progress_bar = ProgressVisorTQDM(thread_info['url'])
+    parse_thread(thread_info=thread_info, filter_obj=None, progress=progress_bar)
     if not vbulletin_session.output_dir:
         vbulletin_session.output_dir = './output/'
     save_parse_result_as_file(thread_info=thread_info, save_to_index=False)
@@ -130,10 +147,86 @@ def thread_parsing_convert_messages_to_BBCode():
             break
 
 
+def thread_search_and_parse_convert_messages_to_PlainText():
+    """
+        This test demonstrates the basic use of a MessageProcessor object
+
+        The previous tests used the basic behaviour of the parser, that stores
+        each post as a HTML object.
+
+        This HTML objects are useful to regenerate HTML files, as seen in previous
+        texts but are hard to process
+
+        In this test we will convert each message to its original BBCode
+    """
+    vbulletin_session.search_words = 'viviendas'
+    vbulletin_session.subforum_id = '23'
+    vbulletin_session.minimum_posts = '1000'
+    vbulletin_session.output_dir = './output/oraculo/'
+    if not os.path.exists(os.path.join(vbulletin_session.output_dir, 'searchu.pickle')):
+        from vBulletinThreadUtils.vBulletinSearch import start_searching
+        link_list = start_searching()
+        with open(os.path.join(vbulletin_session.output_dir, 'search.pickle'), 'wb') as file:
+            pickle.dump(link_list, file)
+    else:
+        with open(os.path.join(vbulletin_session.output_dir, 'search.pickle'), 'rb') as file:
+            link_list = pickle.load(file)
+    message_processor = MessageHTMLToPlainText()
+    # filter_obj = MessageFilterByAuthor('eugim')
+    # vbulletin_session.output_dir = './output/fraude/'
+    filter_obj = MessageFilterByAuthor('kaplane')
+    for thread in link_list['links']:
+        thread_info = thread_id_to_thread_link_dict(thread['id'])
+        json_file = os.path.join(vbulletin_session.output_dir, f'{thread_info["id"]}.json')
+        if not os.path.exists(json_file):
+            parse_thread(thread_info=thread_info, filter_obj=filter_obj, post_processor=message_processor)
+            with open(json_file, 'w', encoding='utf-8') as json_file:
+                json.dump(thread_info, json_file)
+
+
+def thread_parsing_convert_messages_to_PlainText():
+    thread_info = thread_id_to_thread_link_dict('8865750')
+    message_processor = MessageHTMLToPlainText()
+    filter_obj = MessageFilterByAuthor('eugim')
+    vbulletin_session.output_dir = './output/fraude_mayor/'
+    parse_thread(thread_info=thread_info, filter_obj=filter_obj, post_processor=message_processor)
+    with open(os.path.join(vbulletin_session.output_dir,
+                           f'{thread_info["id"]}.json'), 'w', encoding='utf-8') as json_file:
+        json.dump(thread_info, json_file)
+
+
+def thread_parsing_save_to_json_file():
+    """
+        In this test we store the parsing result as a json file instead of generating an HTML
+        output similar to the parsed thread.
+    """
+    thread_ids = ['8875858', '6916796']
+    thread_list = [thread_id_to_thread_link_dict(thread_id) for thread_id in thread_ids]
+    if not vbulletin_session.output_dir:
+        vbulletin_session.output_dir = './output/'
+    filter_obj = MessageFilterByAuthor('@OP')
+    bs4_tag_to_str = MessageHTMLToText()
+    bs4_tag_to_bbcode = MessageHTMLToBBCode()
+    for item in thread_list:
+        parse_thread(thread_info=item, filter_obj=filter_obj)
+        for msg in item['parsed_messages']:
+            bs4_tag = item['parsed_messages'][msg]['message']
+            msg_as_text = bs4_tag_to_str.process_message('', bs4_tag)
+            msg_as_bbcode = bs4_tag_to_bbcode.process_message('', bs4_tag)
+            item['parsed_messages'][msg]['message'] = None
+            item['parsed_messages'][msg]['html_str'] = msg_as_text
+            item['parsed_messages'][msg]['bbcode'] = msg_as_bbcode
+        with open(os.path.join(vbulletin_session.output_dir, f'{item["id"]}.json'), 'w', encoding='utf-8') as json_file:
+            json.dump(item, json_file)
+
+
 def main():
-    # simple_thread_parsing()
+    simple_thread_parsing()
     # simple_thread_parsing_with_index_file()
-    thread_parsing_convert_messages_to_BBCode()
+    # thread_parsing_convert_messages_to_BBCode()
+    # thread_parsing_convert_messages_to_PlainText()
+    # thread_search_and_parse_convert_messages_to_PlainText()
+    # thread_parsing_save_to_json_file()
 
 
 if __name__ == "__main__":

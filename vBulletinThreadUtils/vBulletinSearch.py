@@ -12,12 +12,12 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.select import Select
 from selenium.webdriver.support.ui import WebDriverWait
 
-from vBulletinSession import vbulletin_session
+from vBulletinThreadUtils.vBulletinSession import vbulletin_session
 
 
 def find_next(soup):
     next_link = soup.find("a", {"rel": "next"})
-    return vbulletin_session.config['VBULLETIN']['base_url'] + next_link.get('href', '') if next_link else ''
+    return vbulletin_session.base_url + next_link.get('href', '') if next_link else ''
 
 
 re_author_from_link = re.compile("member.php\?u=([0-9]+)")
@@ -57,9 +57,9 @@ def loop_search_results(driver, start_url):
     timeout = 100
     current_url = start_url
     first_search = True
-    base_url = vbulletin_session.config['VBULLETIN']['base_url']
-    search_query = vbulletin_session.config['SEARCHTHREADS'].get('search_words', '')
-    strict_search = vbulletin_session.config['SEARCHTHREADS'].get('strict_search', False)
+    base_url = vbulletin_session.base_url
+    search_query = vbulletin_session.search_words
+    strict_search = vbulletin_session.strict_search
     search_result = {'links': []}
     while current_url:
         if first_search:
@@ -83,7 +83,6 @@ def loop_search_results(driver, start_url):
 
 
 def fill_search_form(driver):
-    # TODO read extra parameters from config
     try:
         subforum_select = Select(driver.find_element(By.NAME, "forumchoice[]"))
         subforum_select.select_by_value('23')
@@ -96,21 +95,22 @@ def fill_search_form(driver):
     minimum_message_field = driver.find_element(By.CSS_SELECTOR, 'div#collapseobj_search_adv table.panel tbody tr '
                                                                  'td:nth-of-type(1) fieldset.fieldset div '
                                                                  'input.bginput')
-    minimum_message_field.send_keys('0')
+    minimum_message_field = driver.find_element(By.NAME, 'replylimit')
+    minimum_message_field.send_keys(vbulletin_session.minimum_posts)
     search_query_input = driver.find_element(By.CSS_SELECTOR, 'td.panelsurround > table.panel > tbody > tr > '
                                                               'td:nth-of-type(1) fieldset.fieldset table tbody tr '
                                                               'td div input.bginput')
-    search_query = vbulletin_session.config['SEARCHTHREADS'].get('search_words', '')
+    search_query = vbulletin_session.search_words
     search_query_input.send_keys(search_query)
     thread_author_field = driver.find_element(By.ID, "userfield_txt")
-    thread_author = vbulletin_session.config['SEARCHTHREADS'].get('searchuser', '')
+    thread_author = vbulletin_session.search_user
     thread_author_field.send_keys(thread_author)
     thread_author_field.send_keys(Keys.RETURN)
 
 
 def import_cookies_from_session(driver):
     session = vbulletin_session.session
-    driver.get(vbulletin_session.config['VBULLETIN']['base_url'])
+    driver.get(vbulletin_session.base_url)
     for name, value in session.cookies.items():
         driver.delete_cookie(name)
         driver.add_cookie({'name': name, 'value': value})
@@ -129,7 +129,7 @@ def click_cookies_button_and_wait(driver):
 
 def search_selenium():
     # force login here before opening other driver
-    base_url = vbulletin_session.config['VBULLETIN']['base_url']
+    base_url = vbulletin_session.base_url
     search_url = base_url + 'search.php?do=process'
     driver = webdriver.Firefox()
     search_result = None

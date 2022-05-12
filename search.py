@@ -1,8 +1,7 @@
-from vBulletinSearch import start_searching
-from vBulletinSession import vbulletin_session
-from vBulletinThreadDateParser import find_user_message_timestamp
-from vBulletinThreadParserGen import find_user_messages_in_thread_list, thread_id_to_thread_link_dict
-from vBulletinWordCloud import find_user_message_wordcloud
+from vBulletinThreadUtils.vBulletinSearch import start_searching
+from vBulletinThreadUtils.vBulletinSession import vbulletin_session
+from vBulletinThreadUtils.vBulletinThreadParserGen import find_user_messages_in_thread_list, \
+    thread_id_to_thread_link_dict
 
 
 def create_link_list():
@@ -21,7 +20,7 @@ def create_link_list():
 
 def main():
     operation_mode = vbulletin_session.config['OPERATIONMODE']['operation']
-    base_url = vbulletin_session.config['VBULLETIN']['base_url']
+    base_url = vbulletin_session.base_url
 
     filter_usr = vbulletin_session.config['FILTERUSER'].get('username', '')
 
@@ -33,10 +32,6 @@ def main():
         # link list should be a dict link_list{'search_id', 'links'}
         index_file = 'search_{}_index.html'.format(link_list.get('search_id', ''))
         find_user_messages_in_thread_list(link_list['links'], filter_usr, thread_index_file=index_file)
-    elif operation_mode == 'TIMESTAMP':
-        find_user_message_timestamp(link_list, filter_usr)
-    elif operation_mode == 'WORDCLOUD':
-        find_user_message_wordcloud(link_list, filter_usr, base_url)
     elif operation_mode == 'SINGLETHREAD':
         find_user_messages_in_thread_list(link_list, filter_usr)
     else:

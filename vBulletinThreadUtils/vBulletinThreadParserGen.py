@@ -5,12 +5,11 @@ import re
 
 import requests
 from bs4 import BeautifulSoup
-from tqdm.auto import tqdm
 
-import MessageFilter
-import MessageProcessor
-from vBulletinFileUtils import save_parse_result_as_file
-from vBulletinSession import vbulletin_session
+from vBulletinThreadUtils import MessageFilter, MessageProcessor
+from vBulletinThreadUtils.ProgressVisor import ProgressVisor
+from vBulletinThreadUtils.vBulletinFileUtils import save_parse_result_as_file
+from vBulletinThreadUtils.vBulletinSession import vbulletin_session
 
 
 def thread_id_to_thread_link_dict(thread_id):
@@ -23,7 +22,7 @@ def thread_id_to_thread_link_dict(thread_id):
     return {
                 'id': thread_id,
                 'url': '{base}/showthread.php?t={thread_id}'.format(
-                    base=vbulletin_session.config['VBULLETIN'].get('base_url', ''), thread_id=thread_id),
+                    base=vbulletin_session.base_url, thread_id=thread_id),
                 'title': '',
                 'hover': '',
                 'author': '',
@@ -31,9 +30,11 @@ def thread_id_to_thread_link_dict(thread_id):
             }
 
 
-def parse_thread(thread_info: dict, filter_obj: MessageFilter = None, post_processor: MessageProcessor = None):
+def parse_thread(thread_info: dict, filter_obj: MessageFilter = None, post_processor: MessageProcessor = None,
+                 progress: ProgressVisor = None):
     """
     Main method to parse a forum thread
+    :param progress: Used to show a progress bar if desired. See ProgressVisor
     :param thread_info is a dictionary that must contain a field called url
     with the URL of the starting point of the parser
     :param filter_obj: see MessageFilter.py
@@ -58,10 +59,29 @@ def parse_thread(thread_info: dict, filter_obj: MessageFilter = None, post_proce
         'first_post_id': the id of the first post of the thread
         'author': username of the thread author
         'author_id': id of the thread author
+        'last_page': number of the last parsed page (1)
+        'last_message':  number of the last parsed message (2)
         'parsed_messages': a dictionary of parsed messages.
                     keys are the ids of the messages
                     values are dictionaries of the format described below
     }
+
+    (1) last_page can be used to skip the thread pages that were already parsed, as it will
+            generate a starting point url pointing to that last_page
+            - basic URL = {base_url}/showthread.php?t={thread_id}
+            - paged URL = {base_url}/showthread.php?t={thread_id}&page={last_page}
+        last_page WILL BE UPDATED with the last parsed page in this execution
+
+    (2) last_message is used to avoid storing already parsed messages, but all the message from
+            the starting point to last_message will be parsed
+        last_message WILL BE UPDATED with the last parsed message in this execution
+
+    Example:
+        last_page = 3; last_message = 60
+        typical vbulletin page has 25 messages so page number #3 will start with post #51
+        The parser will NOT parse pages #1 and #2. It will start with page #3.
+        The parser will parse messages #51, #52, ..., #59 and #60 but it won't store them in the output. The
+            first message in parsed_messages will be #61
 
     Each of these parsed messages has the following format:
     {
@@ -82,18 +102,20 @@ def parse_thread(thread_info: dict, filter_obj: MessageFilter = None, post_proce
     """
     thread_info['parsed_messages'] = {}
     current_url = thread_info.get('url', '')
+    if thread_info.get('last_page', ''):
+        current_url = f'{current_url}&page={thread_info["last_page"]}'
     if not vbulletin_session.session or not current_url:
         return None
-    with tqdm(position=0, leave=True, desc='Parsing ' + current_url) as progress:
-        while current_url:
-            current_page = vbulletin_session.session.get(current_url)
-            if current_page.status_code != requests.codes.ok:
-                print('Error getting {} - response code: {}'.format(current_url, current_page.status_code))
-                break
-            soup = BeautifulSoup(current_page.text, features="html.parser")
-            __update_progress_bar(progress, soup)
-            __search_and_parse_messages(thread_info, soup, filter_obj, current_url, post_processor)
-            current_url = __get_next_url(soup, current_url)
+    while current_url:
+        current_page = vbulletin_session.session.get(current_url)
+        if current_page.status_code != requests.codes.ok:
+            print('Error getting {} - response code: {}'.format(current_url, current_page.status_code))
+            break
+        soup = BeautifulSoup(current_page.text, features="html.parser")
+        __update_progress_bar(progress, soup)
+        __search_and_parse_messages(thread_info, soup, filter_obj, current_url, post_processor)
+        thread_info["last_page"] = __get_page_number_from_url(current_url)
+        current_url = __get_next_url(soup, current_url)
 
 
 def find_user_messages_in_thread_list(links, username, thread_index_file=''):
@@ -136,7 +158,15 @@ post_index_selector = 'tr:nth-child(1) > td.thead:nth-child(2) > a'
 regex_page_number = re.compile("page=([0-9]+)")
 
 
+def __parse_message_by_index(last_parsed_message, index):
+    if not last_parsed_message:
+        return True
+    else:
+        return int(index) > int(last_parsed_message)
+
+
 def __search_and_parse_messages(thread_info, soup, filter_obj, current_url, post_processor):
+    last_parsed_message = thread_info.get('last_message', 0)
     all_posts_table = soup.select('div[id^="edit"] > table[id^="post"]')
     if not all_posts_table:
         print('Error in thread {} - No messages found'.format(current_url))
@@ -144,8 +174,10 @@ def __search_and_parse_messages(thread_info, soup, filter_obj, current_url, post
     for table in all_posts_table:
         post_id = table.get('id', '')[-9:]
         post_dict = __parse_post_table(post_id, table, post_processor)
-        if post_dict and ((not filter_obj) or (filter_obj and (filter_obj.filter_message(post_id, post_dict)))):
+        if post_dict and __parse_message_by_index(last_parsed_message, post_dict['index']) \
+                and ((not filter_obj) or (filter_obj and (filter_obj.filter_message(post_id, post_dict)))):
             thread_info['parsed_messages'][post_id] = post_dict
+            thread_info['last_message'] = post_dict.get('index', 0)
         __update_thread_info(post_id, thread_info, post_dict)
 
 
@@ -153,7 +185,7 @@ def __get_next_url(soup, current_url):
     next_url = ''
     next_link = soup.select_one('a[rel="next"]')
     if next_link:
-        next_url = vbulletin_session.config['VBULLETIN']['base_url'] + next_link.get('href', '')
+        next_url = vbulletin_session.base_url + next_link.get('href', '')
     return next_url if current_url != next_url else ''
 
 
@@ -229,17 +261,23 @@ def __parse_post_table(post_id, table, post_processor):
     # check for desired output format
 
 
+def __get_page_number_from_url(url):
+    m = regex_page_number.search(url)
+    return m.group(1) if m else ''
+
+
 def __get_last_page(soup):
     last_or_next_link = soup.select_one('td:nth-last-child(2).alt1 > a')
     if not last_or_next_link:
         return ''
     if last_or_next_link.text == '>':
         last_or_next_link = soup.select_one('td:nth-last-child(3).alt1 > a')
-    m = regex_page_number.search(last_or_next_link.attrs.get('href', ''))
-    return m.group(1) if m else ''
+    return __get_page_number_from_url(last_or_next_link.attrs.get('href', ''))
 
 
 def __update_progress_bar(progress, soup):
+    if not progress:
+        return
     if not progress.total:
         last_page = __get_last_page(soup)
         if last_page:

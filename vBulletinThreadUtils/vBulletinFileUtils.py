@@ -6,8 +6,8 @@ import requests
 from bs4 import BeautifulSoup, Tag
 from slugify import slugify
 
-from MessageProcessor import MessageHTMLToText
-from vBulletinSession import vbulletin_session
+from vBulletinThreadUtils.MessageProcessor import MessageHTMLToText
+from vBulletinThreadUtils.vBulletinSession import vbulletin_session
 
 
 def open_index_file(search_id=''):
@@ -21,7 +21,7 @@ def open_index_file(search_id=''):
         os.remove(filename)
     # 'iso-8859-1', 'cp1252'
     index_file = open(filename, "a+", encoding='utf-8')
-    for line in open(os.path.join('resources', 'search_index_header.txt'), "r"):
+    for line in open(os.path.join(vbulletin_session.config['VBULLETIN']['resources'], 'search_index_header.txt'), "r"):
         index_file.write(line)
     return index_file
 
@@ -29,19 +29,20 @@ def open_index_file(search_id=''):
 def create_saved_threads_file(filename):
     if not os.path.exists(filename):
         index_file = open(filename, "a+", encoding='utf-8')
-        for line in open(os.path.join('resources', 'search_index_header.txt'), "r"):
+        for line in open(os.path.join(vbulletin_session.config['VBULLETIN']['resources'], 'search_index_header.txt'), "r"):
             index_file.write(line)
         index_file.write('</table></body></html>')
         index_file.close()
 
 
 def build_table_entry(num_link, thread_info, thread_file_name):
-    with open(os.path.join('resources', 'index_file_entry_pattern.txt'), 'r') as pattern_file:
+    with open(os.path.join(vbulletin_session.config['VBULLETIN']['resources'], 'index_file_entry_pattern.txt'), 'r') \
+            as pattern_file:
         entry_pattern = pattern_file.read()
         return entry_pattern.format(id=thread_info['id'], idx_link=num_link, url=thread_info['url'],
                                     title=thread_info['title'],
                                     hover=thread_info['hover'], author=thread_info['author'],
-                                    url_base=vbulletin_session.config['VBULLETIN']['base_url'],
+                                    url_base=vbulletin_session.base_url,
                                     author_id=thread_info['author_id'],
                                     author_matches=len(thread_info['parsed_messages']),
                                     thread_file_name=thread_file_name)
@@ -91,7 +92,7 @@ def save_search_results_as_index_page(links):
 
 def save_image(src_txt):
     output_dir = vbulletin_session.output_dir
-    server_root = vbulletin_session.config['VBULLETIN'].get('http_server_root', output_dir)
+    server_root = vbulletin_session.http_server_root
     img_filename = slugify(src_txt, max_length=250)
     image_path = os.path.join(output_dir, 'imgs', img_filename)
     # server_root is used to build the new img src attribute so a local
@@ -151,7 +152,7 @@ def open_thread_file(thread_filename, thread_name):
         os.path.join(
             vbulletin_session.output_dir,
             thread_filename), "a+", encoding='utf-8')
-    for line in open(os.path.join('resources', "page_header.txt"), "r"):
+    for line in open(os.path.join(vbulletin_session.config['VBULLETIN']['resources'], "page_header.txt"), "r"):
         if line.startswith('<meta name="description"'):
             thread_file.write(
                 '<meta name=\"description\" content=\"{}\" />'.format(thread_name))
@@ -203,7 +204,7 @@ def fix_links_to_this_thread(thread_id, html_node):
             post_id = regex_post_id.search(href_val)
             link.attrs['href'] = '#post{}'.format(post_id.group(1) if post_id else href_val)
         elif not urlparse(href_val).netloc:
-            link.attrs['href'] = vbulletin_session.config['VBULLETIN']['base_url'] + href_val
+            link.attrs['href'] = vbulletin_session.base_url + href_val
 
 
 def fix_links_to_posts_in_this_thread(html_node):
@@ -218,7 +219,7 @@ def fix_links_to_user_profiles(html_node):
     all_user_profiles = html_node.find_all('a', {'href': regex_link_to_profile}, recursive=True)
     for link in all_user_profiles:
         if not urlparse(link.attrs.get('href', '')).netloc:
-            link.attrs['href'] = vbulletin_session.confg['VBULLETIN']['base_url'] + link.attrs.get('href', '')
+            link.attrs['href'] = vbulletin_session.base_url + link.attrs.get('href', '')
 
 
 def fix_quotes_links(thread_id, message):
@@ -253,7 +254,7 @@ def save_all_images_in_message(message):
 def write_message_to_thread_file(thread_file, thread_id, message_id, message):
     fixed_message = fix_quotes_links(thread_id, message)
     message = full_message_template.format(
-        base_url=vbulletin_session.config['VBULLETIN']['base_url'],
+        base_url=vbulletin_session.base_url,
         anchor_name=message_id,
         post_id=message_id,
         post_date=message['date'],
