@@ -50,6 +50,15 @@ class ProgressVisorTQDM(ProgressVisor):
         super().__init__(message)
         self.__tqdm_progress = tqdm(position=0, leave=True, desc=f'Parsing {message}')
 
+    @property
+    def total(self):
+        return self.total_iterations
+
+    @total.setter
+    def total(self, total_iterations):
+        super().__init__(total_iterations)
+        self.__tqdm_progress.total = total_iterations
+
     def update(self):
         self.__tqdm_progress.update()
 

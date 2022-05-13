@@ -165,6 +165,23 @@ def __parse_message_by_index(last_parsed_message, index):
         return int(index) > int(last_parsed_message)
 
 
+def __update_thread_timestamps(thread_info, soup):
+    if thread_info.get('creation_date', ''):
+        return
+    all_script_data = soup.find_all('script', {'type': 'application/ld+json'})
+    json_type_str = '"@type":"DiscussionForumPosting"'
+    for data in all_script_data:
+        type_pos = data.text.find(json_type_str, 30, 90)
+        if type_pos >= 0:
+            regex_date_published = re.compile('datePublished":\s*"([\d\-T\+:]{25})').search(data.text)
+            regex_date_modified = re.compile('dateModified":\s*"([\d\-T\+:]{25})').search(data.text)
+            regex_interaction_count = re.compile('userInteractionCount":\s*"(\d+)"').search(data.text)
+            thread_info['creation_date'] = regex_date_published.group(1) if regex_date_published else ''
+            thread_info['modification_date'] = regex_date_modified.group(1) if regex_date_modified else ''
+            thread_info['message_count'] = int(regex_interaction_count.group(1)) + 1 if regex_interaction_count else 0
+            return
+
+
 def __search_and_parse_messages(thread_info, soup, filter_obj, current_url, post_processor):
     last_parsed_message = thread_info.get('last_message', 0)
     all_posts_table = soup.select('div[id^="edit"] > table[id^="post"]')
@@ -179,6 +196,7 @@ def __search_and_parse_messages(thread_info, soup, filter_obj, current_url, post
             thread_info['parsed_messages'][post_id] = post_dict
             thread_info['last_message'] = post_dict.get('index', 0)
         __update_thread_info(post_id, thread_info, post_dict)
+        __update_thread_timestamps(thread_info, soup)
 
 
 def __get_next_url(soup, current_url):
