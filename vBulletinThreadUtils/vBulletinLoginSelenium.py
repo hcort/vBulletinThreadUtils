@@ -1,3 +1,5 @@
+import os
+
 import requests
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
@@ -25,6 +27,7 @@ def VBulletinLogin(login_url='', login_data={}):
 def VBulletinLoginSelenium(login_url='', login_data=None):
     if not login_url or not login_data:
         return None
+    os.environ['MOZ_HEADLESS'] = '1'
     driver = webdriver.Firefox()
     s = None
     # selenium.common.exceptions.WebDriverException: Message: Service geckodriver unexpectedly exited. Status code

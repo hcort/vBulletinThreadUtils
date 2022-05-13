@@ -1,8 +1,7 @@
 # beautiful soup for HTML parsing
+import os
 import re
-import urllib.parse
 
-import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
@@ -20,8 +19,8 @@ def find_next(soup):
     return vbulletin_session.base_url + next_link.get('href', '') if next_link else ''
 
 
-re_author_from_link = re.compile("member.php\?u=([0-9]+)")
-re_thread_id_from_link = re.compile("thread_title_([0-9]+)")
+re_author_from_link = re.compile("member.php\?u=(\d+)")
+re_thread_id_from_link = re.compile("thread_title_(\d+)")
 
 
 def get_links(base_url, soup, search_query='', strict_search=False):
@@ -48,7 +47,7 @@ def get_links(base_url, soup, search_query='', strict_search=False):
 
 
 def get_search_id(driver):
-    regex_thread_id = re.compile("searchid=([0-9]+)")
+    regex_thread_id = re.compile("searchid=(\d+)")
     search_id = regex_thread_id.search(driver.current_url)
     return search_id.group(1) if search_id else ''
 
@@ -131,6 +130,7 @@ def search_selenium():
     # force login here before opening other driver
     base_url = vbulletin_session.base_url
     search_url = base_url + 'search.php?do=process'
+    os.environ['MOZ_HEADLESS'] = '1'
     driver = webdriver.Firefox()
     search_result = None
     try:
