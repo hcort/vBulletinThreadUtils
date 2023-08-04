@@ -24,34 +24,95 @@ def VBulletinLogin(login_url='', login_data={}):
     return VBulletinLoginSelenium(login_url=login_url, login_data=login_data)
 
 
+def do_login_and_wait(driver, login_url, login_data):
+    driver.get(login_url)
+    element = driver.find_element(By.NAME, "vb_login_username")
+    element.send_keys(login_data.get('vb_login_username', ''))
+    element = driver.find_element(By.NAME, "vb_login_password")
+    element.send_keys(login_data.get('vb_login_password', ''))
+    element.send_keys(Keys.RETURN)
+    timeout = 100
+    element_present = EC.presence_of_element_located((By.ID, "AutoNumber1"))
+    WebDriverWait(driver, timeout).until(element_present)
+
+
+def hijack_cookies(driver):
+    s = create_session_object()
+    for cookie in driver.get_cookies():
+        c = {cookie['name']: cookie['value']}
+        s.cookies.update(c)
+    return s
+
+
+def click_cookies_button(driver):
+    timeout = 100
+    element_present = EC.presence_of_element_located((By.CLASS_NAME, 'sd-cmp-3cRQ2'))
+    WebDriverWait(driver, timeout).until(element_present)
+    element = driver.find_element(By.CLASS_NAME, 'sd-cmp-3cRQ2')
+    element.click()
+    element_present = EC.presence_of_element_located((By.CLASS_NAME, 'sd-cmp-3cRQ2'))
+    WebDriverWait(driver, timeout).until_not(element_present)
+
+
 def VBulletinLoginSelenium(login_url='', login_data=None):
+    """
+    :param login_url: the url with the login form
+    :param login_data: all the login data we need
+    :return: This method returs a Requests session in which we put the cookies extracted from Selenium
+
+        The Selenium driver is closed after getting the cookies, as we proceed to the parsing+
+        using Requests and Beautiful Soup
+    """
     if not login_url or not login_data:
         return None
-    os.environ['MOZ_HEADLESS'] = '1'
+    # os.environ['MOZ_HEADLESS'] = '1'
     driver = webdriver.Firefox()
     s = None
     # selenium.common.exceptions.WebDriverException: Message: Service geckodriver unexpectedly exited. Status code
     # was: 64 miro geckodriver.log geckodriver: error: Found argument '--websocket-port' which wasn't expected,
     # or isn't valid in this context > actualizar geckodriver https://stackoverflow.com/a/70822145/4105601
     try:
-        driver.get(login_url)
-        element = driver.find_element(By.ID, "navbar_username")
-        element.send_keys(login_data.get('vb_login_username', ''))
-        element = driver.find_element(By.ID, "navbar_password")
-        element.send_keys(login_data.get('vb_login_password', ''))
-        element.send_keys(Keys.RETURN)
-        timeout = 100
-        element_present = EC.presence_of_element_located((By.LINK_TEXT, login_data.get('vb_login_username', '')))
-        WebDriverWait(driver, timeout).until(element_present)
-        s = create_session_object()
-        for cookie in driver.get_cookies():
-            c = {cookie['name']: cookie['value']}
-            s.cookies.update(c)
+        do_login_and_wait(driver, login_url, login_data)
+        s = hijack_cookies(driver)
         cookie_bbimloggedin = s.cookies.get('bbimloggedin', default='no')
         if cookie_bbimloggedin == 'no':
             print('cookie bbimloggedin no encontrada')
     except TimeoutException as ex:
         print('Error accessing {}: Timeout: {}'.format(login_url, str(ex)))
+    except Exception as ex:
+        print('Error accessing {}: Unknown error: {}'.format(login_url, str(ex)))
     finally:
         driver.close()
     return s
+
+
+def create_driver_and_login(login_url='', login_data=None):
+    """
+    :param login_url: the url with the login form
+    :param login_data: all the login data we need
+    :return: This method logs in into the forum and then returns the Selenium driver
+    """
+    if not login_url or not login_data:
+        return None
+    os.environ['MOZ_HEADLESS'] = '1'
+    driver = webdriver.Firefox()
+    do_login_and_wait(driver, login_url, login_data)
+    logged_in = False
+    s = hijack_cookies(driver)
+    logged_in = s.cookies.get('bbimloggedin', default='no') == 'yes'
+    if not logged_in:
+        print('cookie bbimloggedin no encontrada')
+        driver.close()
+        return None
+    click_cookies_button(driver)
+    return driver
+
+
+def test_driver():
+    driver = webdriver.Firefox()
+    try:
+        driver.get('about:blank')
+    except TimeoutException as ex:
+        print(f'Error {str(ex)}')
+    finally:
+        driver.close()

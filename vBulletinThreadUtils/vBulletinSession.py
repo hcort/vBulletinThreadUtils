@@ -16,8 +16,11 @@ class VBulletinSession:
             'output_dir': os.path.join(os.getcwd(), 'output'),
             'output_format': 'HTML'
         }
-        self.__config.read(os.path.join('./resources', 'config.ini'), encoding='utf-8')
-        # some optional configuration values
+        config_path = os.path.join(self.__config['DEFAULT']['resources'], 'config.ini')
+        try:
+            self.__config.read(config_path, encoding='utf-8')
+        except IOError as err:
+            print(f'Error opening config file: {config_path}')
         self.__output_dir = self.__config['VBULLETIN']['output_dir']
         self.__output_format = self.__config['VBULLETIN']['output_format']
         self.__user_name = self.__config['VBULLETIN'].get('logname', '')
@@ -233,7 +236,8 @@ class VBulletinSession:
         login_data = {
             'vb_login_username': self.__user_name,
             'vb_login_password': self.__password}
-        self.__session = VBulletinLogin(self.__base_url + 'login.php', login_data)
+        # .../foro/misc.php?do=page&template=ident
+        self.__session = VBulletinLogin(self.__base_url + 'misc.php?do=page&template=ident', login_data)
 
 
 vbulletin_session = VBulletinSession()
