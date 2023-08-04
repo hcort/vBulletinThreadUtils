@@ -5,12 +5,14 @@ import re
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
+from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.select import Select
 from selenium.webdriver.support.ui import WebDriverWait
 
+from vBulletinThreadUtils.vBulletinLoginSelenium import click_cookies_button
 from vBulletinThreadUtils.vBulletinSession import vbulletin_session
 
 
@@ -53,7 +55,7 @@ def get_search_id(driver):
 
 
 def loop_search_results(driver, start_url):
-    timeout = 100
+    timeout = 50
     current_url = start_url
     first_search = True
     base_url = vbulletin_session.base_url
@@ -79,6 +81,70 @@ def loop_search_results(driver, start_url):
                                                 search_query=search_query, strict_search=strict_search)
             current_url = find_next(search_soup)
     return search_result
+
+
+regex_post_id = re.compile("p=(\d+)")
+
+
+def search_results_no_parser(driver,
+                             search_url,
+                             keyword='',
+                             author='',
+                             time_limit='365',
+                             older_than=True,
+                             ascending=True,
+                             subforum='2'):
+    """
+    :param driver: the Selenium driver
+    :param search_url:
+    :param keyword: search keywords
+    :param author: search messages by author
+    :param time_limit: search option
+    :param older_than: search option
+    :param ascending: search option
+    :param subforum: search option
+
+    :return: A list of messages found
+
+        This method iterates over the search results and extracts the links to the messages without parsing
+
+        See search_selenium and get_links for a search method that parses the results and extracts the messages
+        as a dictionary object
+    """
+    driver.get(search_url)
+    has_results = fill_search_form_old_messages_by_author(driver, keyword=keyword, author=author, time_limit=time_limit,
+                                                          older_than=older_than,
+                                                          ascending=ascending, subforum=subforum)
+    if not has_results:
+        return
+    # element_present = EC.presence_of_element_located((By.ID, 'threadslist'))
+    # WebDriverWait(driver, timeout=1000).until(element_present)
+    timeout = 50
+    current_url = '-'
+    messages_found = []
+    while current_url:
+        try:
+            element_present = EC.presence_of_element_located((By.ID, 'threadslist'))
+            WebDriverWait(driver, timeout).until(element_present)
+            element_present = driver.find_element(By.ID, 'inlinemodform')
+            for table in element_present.find_elements_by_xpath(".//table[starts-with(@id, 'post')]"):
+                titulo = table.find_element(By.CSS_SELECTOR, 'td.alt1 a').text
+                href = table.find_element(By.CSS_SELECTOR, 'div.alt2 a').get_attribute('href')
+                post_id_r = regex_post_id.search(href)
+                post_id = post_id_r.group(1) if post_id_r else ''
+                # print('----------------------------------------------------------------------------------------------')
+                # print(titulo)
+                # print(table.find_element(By.CLASS_NAME, 'alt2').text[:150])
+                # print(href)
+                # print('----------------------------------------------------------------------------------------------')
+                messages_found.append(href)
+            element = driver.find_element(By.LINK_TEXT, '>')
+            current_url = element.get_attribute('href')
+            driver.get(current_url)
+        except Exception as err:
+            print(f'Error procesando la lista de mensajes - {str(err)}')
+            current_url = None
+    return messages_found
 
 
 def fill_search_form(driver):
@@ -107,23 +173,75 @@ def fill_search_form(driver):
     thread_author_field.send_keys(Keys.RETURN)
 
 
+def fill_search_form_old_messages_by_author(driver, keyword='', author='', time_limit='365', older_than=True,
+                                            ascending=True, subforum='2'):
+    """
+    :param driver: the Selenium driver
+    :param search_url:
+    :param keyword: search keywords
+    :param author: search messages by author
+    :param time_limit: search option
+    :param older_than: search option
+    :param ascending: search option
+    :param subforum: search option
+    :return:
+    """
+    thread_list_present = False
+    try:
+        # subforum_select = Select(driver.find_element(By.NAME, "forumchoice[]"))
+        # subforum_select.select_by_value(subforum)
+        # title_only_select = Select(driver.find_element(By.CSS_SELECTOR, "select[name=titleonly]"))
+        # title_only_select.select_by_value('1')  # 0: search in msg, 1: search in title
+        # thread_starter_select = Select(driver.find_element(By.CSS_SELECTOR, "select[name=starteronly]"))
+        # thread_starter_select.select_by_value('1')
+        # minimum_message_field = driver.find_element(By.CSS_SELECTOR, 'div#collapseobj_search_adv table.panel tbody tr '
+        #                                                              'td:nth-of-type(1) fieldset.fieldset div '
+        #                                                              'input.bginput')
+        # minimum_message_field = driver.find_element(By.NAME, 'replylimit')
+        # minimum_message_field.send_keys(vbulletin_session.minimum_posts)
+
+        # actions = ActionChains(driver)
+        # actions.move_to_element(element)
+        # actions.perform()
+        search_by_date_select = Select(driver.find_element(By.NAME, 'searchdate'))
+        search_by_date_select.select_by_value(time_limit)
+        if older_than:
+            older_newer_select = Select(driver.find_element(By.NAME, 'beforeafter'))
+            older_newer_select.select_by_value('before')
+        if ascending:
+            order_messages_select = Select(driver.find_element(By.NAME, 'order'))
+            order_messages_select.select_by_value('ascending')
+        show_messages_radio = driver.find_element(By.ID, 'rb_showposts_1')
+        driver.execute_script("return arguments[0].scrollIntoView();", show_messages_radio)
+        show_messages_radio.click()
+        search_query_input = driver.find_element(By.CSS_SELECTOR, 'td.panelsurround > table.panel > tbody > tr > '
+                                                                  'td:nth-of-type(1) fieldset.fieldset table tbody tr '
+                                                                  'td div input.bginput')
+        search_query_input.send_keys(keyword)
+        thread_author_field = driver.find_element(By.ID, "userfield_txt")
+        thread_author_field.send_keys(author)
+        thread_author_field.send_keys(Keys.RETURN)
+        thread_author_field.send_keys(Keys.RETURN)
+        timeout = 20
+        element_present = EC.presence_of_element_located((By.ID, 'threadslist'))
+        WebDriverWait(driver, timeout).until(element_present)
+        thread_list_present = True
+    except TimeoutException as err:
+        print(f'No se han encontrado resultados - Búsqueda *{keyword}* - *{author}*')
+    except Exception as err:
+        print(f'Se ha producido un error en la búsqueda: str(err)- Búsqueda *{keyword}* - *{author}*')
+    return thread_list_present
+
+
 def import_cookies_from_session(driver):
+    """
+        This is the opposite method of vBulletinLoginSelenium.hijack_cookies
+    """
     session = vbulletin_session.session
     driver.get(vbulletin_session.base_url)
     for name, value in session.cookies.items():
         driver.delete_cookie(name)
         driver.add_cookie({'name': name, 'value': value})
-
-
-def click_cookies_button_and_wait(driver):
-    try:
-        # press accept cookies button so select is not obscured
-        element_present = EC.presence_of_element_located((By.CSS_SELECTOR, "button.sd-cmp-JnaLO"))
-        WebDriverWait(driver, timeout=1000).until(element_present)
-        cookie_button = driver.find_element(By.CSS_SELECTOR, "button.sd-cmp-JnaLO")
-        cookie_button.click()
-    except Exception as ex:
-        print('Cant locate cookies button. ' + str(ex))
 
 
 def search_selenium():
@@ -136,7 +254,7 @@ def search_selenium():
     try:
         import_cookies_from_session(driver)
         driver.get(search_url)
-        click_cookies_button_and_wait(driver)
+        click_cookies_button(driver)
         fill_search_form(driver)
         element_present = EC.presence_of_element_located((By.ID, 'threadslist'))
         WebDriverWait(driver, timeout=1000).until(element_present)
