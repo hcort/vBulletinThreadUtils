@@ -14,7 +14,7 @@ from vBulletinThreadUtils.vBulletinSession import vbulletin_session
 
 def thread_id_to_thread_link_dict(thread_id):
     """
-    Builds a empty thread_info dictionary with just thread_id and url values
+    Builds an empty thread_info dictionary with just thread_id and url values
 
     :param thread_id:
     :return: a thread_info dictionary in a format expected by the parse_thread method
@@ -190,7 +190,7 @@ def __search_and_parse_messages(thread_info, soup, filter_obj, current_url, post
         return
     for table in all_posts_table:
         post_id = table.get('id', '')[-9:]
-        post_dict = __parse_post_table(post_id, table, post_processor)
+        post_dict = __parse_post_table(thread_info, post_id, table, post_processor)
         if post_dict and __parse_message_by_index(last_parsed_message, post_dict['index']) \
                 and ((not filter_obj) or (filter_obj and (filter_obj.filter_message(post_id, post_dict)))):
             thread_info['parsed_messages'][post_id] = post_dict
@@ -251,7 +251,7 @@ def __get_user_avatar(table):
     return user_avatar.get('src', '') if user_avatar else ''
 
 
-def __parse_post_table(post_id, table, post_processor):
+def __parse_post_table(thread_info, post_id, table, post_processor):
     post_date = __get_post_date(table)
     post_index, post_link = __get_post_index_and_link(table)
     user_id, user_name = __get_user_id_and_name(table, post_id)
@@ -261,7 +261,7 @@ def __parse_post_table(post_id, table, post_processor):
     # user_location = table.select_one(user_location_selector)
     # user_car_info = table.select_one(user_car_info_selector)
     saved_message = __get_post_HTML(table) if not post_processor else \
-        post_processor.process_message(post_id, __get_post_HTML(table))
+        post_processor.process_message(thread_info=thread_info, post_id=post_id, message=__get_post_HTML(table))
     return {
         'author': {
             'id': user_id,

@@ -6,7 +6,6 @@ import requests
 from bs4 import BeautifulSoup, Tag
 from slugify import slugify
 
-from vBulletinThreadUtils.MessageProcessor import MessageHTMLToText
 from vBulletinThreadUtils.vBulletinSession import vbulletin_session
 
 
@@ -235,8 +234,7 @@ def fix_quotes_links(thread_id, message):
     fix_links_to_this_thread(thread_id, html_node)
     fix_links_to_posts_in_this_thread(html_node)
     fix_links_to_user_profiles(html_node)
-    html2text = MessageHTMLToText()
-    return html2text.process_message(post_id='', message=html_node)
+    return message.prettify(formatter="minimal")
 
 
 def save_all_images_in_message(message):
