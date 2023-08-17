@@ -50,6 +50,7 @@ def xenforo_login_selenium(login_url='', login_data=None):
 
 
 regex_thread_id_url = re.compile("/threads/(.+)/")
+regex_thread_page_number = re.compile("/page-([0-9]+)")
 
 
 def update_progress_bar(progress, soup):
@@ -80,6 +81,8 @@ def parse_thread_xenforo(session, thread_info, filter_obj: MessageFilter = None,
     if not session:
         return
     first_url = thread_info.get("last_page", thread_info['url'])
+    if progress and thread_info['last_page']:
+        progress.update(n=int(regex_thread_page_number.search(thread_info['last_page']).groups(0)[0]))
     url_parts = urllib.parse.urlparse(first_url)
     base_url = f'{url_parts.scheme}://{url_parts.hostname}'
     current_url = url_parts.path

@@ -55,13 +55,17 @@ class ProgressVisorTQDM(ProgressVisor):
     def total(self):
         return self.total_iterations
 
+    @property
+    def initial(self, ini):
+        self.__tqdm_progress.initial = ini
+
     @total.setter
     def total(self, total_iterations):
         super().__init__(total_iterations)
         self.__tqdm_progress.total = total_iterations
 
-    def update(self):
-        self.__tqdm_progress.update()
+    def update(self, n=1):
+        self.__tqdm_progress.update(n)
 
 
 def simple_thread_parsing():

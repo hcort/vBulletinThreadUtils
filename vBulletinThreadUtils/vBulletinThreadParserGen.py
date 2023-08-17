@@ -106,6 +106,9 @@ def parse_thread(thread_info: dict, filter_obj: MessageFilter = None, post_proce
         current_url = f'{current_url}&page={thread_info["last_page"]}'
     if not vbulletin_session.session or not current_url:
         return None
+
+    if progress and thread_info['last_page']:
+        progress.update(n=thread_info["last_page"])
     while current_url:
         current_page = vbulletin_session.session.get(current_url)
         if current_page.status_code != requests.codes.ok:
