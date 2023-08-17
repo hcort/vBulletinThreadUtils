@@ -9,7 +9,36 @@ from slugify import slugify
 from vBulletinThreadUtils.vBulletinSession import vbulletin_session
 
 
-def open_index_file(search_id=''):
+def save_parse_result_as_file(thread_info, save_to_index=False, thread_index_file=''):
+    """
+        Main entry point to the file utils
+
+        This method does all the work to save a thread (stored in the thread_info dictionary) into
+        an HTML file
+
+    :param thread_info: The parsed thread
+    :param save_to_index: Adds this thread as an entry to the index file
+    :param thread_index_file: The index file
+    :return: Nothing
+    """
+    thread_messages = thread_info.get('parsed_messages', {})
+    if not thread_messages:
+        return
+    thread_file_name = get_thread_file_name(thread_id=thread_info['id'],
+                                            thread_name=thread_info['title'])
+    thread_file = open_thread_file(thread_filename=thread_file_name,
+                                   thread_name=thread_info['title'])
+    for message in thread_messages:
+        write_message_to_thread_file(thread_file=thread_file,
+                                     thread_id=thread_info['id'],
+                                     message_id=message,
+                                     message=thread_messages[message])
+    close_thread_file(thread_file)
+    if save_to_index:
+        __update_saved_threads_page(thread_info, thread_file_name, thread_index_file)
+
+
+def __open_index_file(search_id=''):
     output_dir = vbulletin_session.output_dir
     if search_id:
         filename = 'search_{}.html'.format(search_id)
@@ -25,7 +54,7 @@ def open_index_file(search_id=''):
     return index_file
 
 
-def create_saved_threads_file(filename):
+def __create_saved_threads_file(filename):
     if not os.path.exists(filename):
         index_file = open(filename, "a+", encoding='utf-8')
         for line in open(os.path.join(vbulletin_session.config['VBULLETIN']['resources'], 'search_index_header.txt'), "r"):
@@ -34,7 +63,7 @@ def create_saved_threads_file(filename):
         index_file.close()
 
 
-def build_table_entry(num_link, thread_info, thread_file_name):
+def __build_table_entry(num_link, thread_info, thread_file_name):
     with open(os.path.join(vbulletin_session.config['VBULLETIN']['resources'], 'index_file_entry_pattern.txt'), 'r') \
             as pattern_file:
         entry_pattern = pattern_file.read()
@@ -47,7 +76,7 @@ def build_table_entry(num_link, thread_info, thread_file_name):
                                     thread_file_name=thread_file_name)
 
 
-def insert_thread_saved_threads_file(filename, thread_info, thread_file_name):
+def __insert_thread_saved_threads_file(filename, thread_info, thread_file_name):
     soup = BeautifulSoup(open(filename, "r", encoding='utf-8'), features="html.parser")
     results_table = soup.select_one('table.tborder')
     updated_row = soup.select_one('tr#tr_thread_{}'.format(thread_info['id']))
@@ -59,7 +88,7 @@ def insert_thread_saved_threads_file(filename, thread_info, thread_file_name):
         num_link = len(results_table.select('tr[id^=tr_thread_]')) + 1
         last_message_count = 0
     if not updated_row or (last_message_count != len(thread_info['parsed_messages'])):
-        table_entry = build_table_entry(num_link, thread_info, thread_file_name)
+        table_entry = __build_table_entry(num_link, thread_info, thread_file_name)
         table_entry_soup = BeautifulSoup(table_entry, features="html.parser")
         if not updated_row:
             results_table.append(table_entry_soup)
@@ -70,75 +99,23 @@ def insert_thread_saved_threads_file(filename, thread_info, thread_file_name):
             new_file.write(str(soup))
 
 
-def update_saved_threads_page(thread_info, thread_file_name, thread_index_file=''):
+def __update_saved_threads_page(thread_info, thread_file_name, thread_index_file=''):
     output_dir = vbulletin_session.output_dir
     if not thread_index_file:
         filename = os.path.join(output_dir, 'saved_threads.html')
     else:
         filename = os.path.join(output_dir, thread_index_file)
-    create_saved_threads_file(filename)
-    insert_thread_saved_threads_file(filename, thread_info, thread_file_name)
+    __create_saved_threads_file(filename)
+    __insert_thread_saved_threads_file(filename, thread_info, thread_file_name)
 
 
 def save_search_results_as_index_page(links):
-    index_file = open_index_file(links.get('search_id', ''))
+    index_file = __open_index_file(links.get('search_id', ''))
     for idx, link in enumerate(links):
-        link_pattern = build_table_entry(idx, link, thread_file_name='')
+        link_pattern = __build_table_entry(idx, link, thread_file_name='')
         index_file.write(link_pattern)
     index_file.write('</table></body></html>')
     index_file.close()
-
-
-def save_image(src_txt):
-    output_dir = vbulletin_session.output_dir
-    server_root = vbulletin_session.http_server_root
-    img_filename = slugify(src_txt, max_length=250)
-    image_path = os.path.join(output_dir, 'imgs', img_filename)
-    # server_root is used to build the new img src attribute so a local
-    # http server can display them properly
-    if server_root:
-        rel_path = os.path.relpath(output_dir, server_root)
-        image_src_new = os.path.join('\\', rel_path, 'imgs', img_filename)
-    else:
-        image_src_new = image_path
-    if not os.path.exists(image_path):
-        with open(image_path, 'wb') as handle:
-            try:
-                response = requests.get(src_txt, stream=True)
-                if not response.ok:
-                    print('Error getting image: ' + src_txt)
-                for block in response.iter_content(1024):
-                    if not block:
-                        break
-                    handle.write(block)
-                return image_src_new
-            except ConnectionError as err:
-                print('Error getting image: ' + src_txt)
-                print(err)
-            except Exception as err:
-                print('Error getting image: ' + src_txt)
-                print(err)
-    else:
-        return image_src_new
-    return src_txt
-
-
-def save_parse_result_as_file(thread_info, save_to_index=False, thread_index_file=''):
-    thread_messages = thread_info.get('parsed_messages', {})
-    if not thread_messages:
-        return
-    thread_file_name = get_thread_file_name(thread_id=thread_info['id'],
-                                            thread_name=thread_info['title'])
-    thread_file = open_thread_file(thread_filename=thread_file_name,
-                                   thread_name=thread_info['title'])
-    for message in thread_messages:
-        write_message_to_thread_file(thread_file=thread_file,
-                                     thread_id=thread_info['id'],
-                                     message_id=message,
-                                     message=thread_messages[message])
-    close_thread_file(thread_file)
-    if save_to_index:
-        update_saved_threads_page(thread_info, thread_file_name, thread_index_file)
 
 
 def get_thread_file_name(thread_id, thread_name):
@@ -194,7 +171,7 @@ regex_link_to_message = re.compile("showthread\.php\?p=([0-9]+)")
 regex_link_to_profile = re.compile("member\.php\?u=([0-9]+)")
 
 
-def fix_links_to_this_thread(thread_id, html_node):
+def __fix_links_to_this_thread(thread_id, html_node):
     all_thread_links = html_node.find_all('a', {'href': regex_link_to_thread}, recursive=True)
     for link in all_thread_links:
         href_val = link.attrs.get('href', '')
@@ -206,7 +183,7 @@ def fix_links_to_this_thread(thread_id, html_node):
             link.attrs['href'] = vbulletin_session.base_url + href_val
 
 
-def fix_links_to_posts_in_this_thread(html_node):
+def __fix_links_to_posts_in_this_thread(html_node):
     all_posts_links = html_node.find_all('a', {'href': regex_link_to_message}, recursive=True)
     for link in all_posts_links:
         post_id = regex_post_id.search(link.attrs.get('href', ''))
@@ -214,14 +191,14 @@ def fix_links_to_posts_in_this_thread(html_node):
             link.attrs['href'] = '#post{}'.format(post_id.group(1))
 
 
-def fix_links_to_user_profiles(html_node):
+def __fix_links_to_user_profiles(html_node):
     all_user_profiles = html_node.find_all('a', {'href': regex_link_to_profile}, recursive=True)
     for link in all_user_profiles:
         if not urlparse(link.attrs.get('href', '')).netloc:
             link.attrs['href'] = vbulletin_session.base_url + link.attrs.get('href', '')
 
 
-def fix_quotes_links(thread_id, mess_content):
+def __fix_quotes_links(thread_id, mess_content):
     if not mess_content:
         return
     """
@@ -230,29 +207,15 @@ def fix_quotes_links(thread_id, mess_content):
         Fixes relative links to include the forum base URL
     """
     html_node = mess_content if (type(mess_content) is Tag) else BeautifulSoup(mess_content, features="html.parser")
-    fix_links_to_this_thread(thread_id, html_node)
-    fix_links_to_posts_in_this_thread(html_node)
-    fix_links_to_user_profiles(html_node)
+    __fix_links_to_this_thread(thread_id, html_node)
+    __fix_links_to_posts_in_this_thread(html_node)
+    __fix_links_to_user_profiles(html_node)
     return mess_content.prettify(formatter="minimal")
 
 
-def write_message_to_thread_file_only_html_tag(thread_file, thread_id, message_id, message_as_tag):
-    message = {
-        'date': '',
-        'index': '',
-        'author': {
-            'id': '',
-            'username': '',
-            'avatar': ''
-        },
-        'message': message_as_tag
-    }
-    write_message_to_thread_file(thread_file, thread_id, message_id, message)
-
-
 def write_message_to_thread_file(thread_file, thread_id, message_id, message):
-    fixed_message = fix_quotes_links(thread_id, mess_content=message.get('message', None))
-    message = full_message_template.format(
+    fixed_message = __fix_quotes_links(thread_id, mess_content=message.get('message', None))
+    message_str = full_message_template.format(
         base_url=vbulletin_session.base_url,
         anchor_name=message_id,
         post_id=message_id,
@@ -264,10 +227,10 @@ def write_message_to_thread_file(thread_file, thread_id, message_id, message):
         avatar_url=message['author']['avatar'],
         message_text=fixed_message
     )
-    write_str_to_thread_file(thread_file=thread_file, table_str=message)
+    __write_str_to_thread_file(thread_file=thread_file, table_str=message_str)
 
 
-def write_str_to_thread_file(thread_file, table_str, retries=10):
+def __write_str_to_thread_file(thread_file, table_str, retries=10):
     if retries > 0:
         try:
             thread_file.write(table_str)
@@ -278,8 +241,8 @@ def write_str_to_thread_file(thread_file, table_str, retries=10):
                 table_str_2 = table_str.encode('utf-8', errors='surrogatepass')
             else:
                 table_str_2 = table_str.encode('utf-8', errors='backlashreplace')
-            return write_str_to_thread_file(thread_file, str(table_str_2, encoding='utf-8', errors='ignore'),
-                                            retries - 1)
+            return __write_str_to_thread_file(thread_file, str(table_str_2, encoding='utf-8', errors='ignore'),
+                                              retries - 1)
         except Exception as err:
             print(str(err))
     return False

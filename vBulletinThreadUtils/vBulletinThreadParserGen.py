@@ -115,7 +115,7 @@ def parse_thread(thread_info: dict, filter_obj: MessageFilter = None, post_proce
         __update_progress_bar(progress, soup)
         __search_and_parse_messages(thread_info, soup, filter_obj, current_url, post_processor)
         thread_info["last_page"] = __get_page_number_from_url(current_url)
-        current_url = __get_next_url(soup, current_url)
+        current_url = __get_next_url(soup)
 
 
 def find_user_messages_in_thread_list(links, username, thread_index_file=''):
@@ -140,7 +140,6 @@ def find_user_messages_in_thread_list(links, username, thread_index_file=''):
 page_nav_bar_selector = 'body > div:nth-child(14) > div:nth-child(1) > div:nth-child(1) > table:nth-of-type(4) ' \
                         '> tr > td:nth-child(2) > div.pagenav > table.tborder > tr '
 username_selector = 'tr:nth-child(2) > td.alt2 > div#postmenu_{} > a.bigusername'
-user_avatar_selector = 'tr:nth-child(2) > td.alt2 > div.smallfont:nth-of-type(3) > a > img'
 user_registration_date_selector = 'tr:nth-child(2) > td.alt2 > div.smallfont:nth-of-type(4) > div:nth-of-type(1)'
 user_location_selector = 'tr:nth-child(2) > td.alt2 > div.smallfont:nth-of-type(4) > div:nth-of-type(2)'
 user_car_info_selector = 'tr:nth-child(2) > td.alt2 > div.smallfont:nth-of-type(4) > div:nth-of-type(3)'
@@ -184,24 +183,26 @@ def __search_and_parse_messages(thread_info, soup, filter_obj, current_url, post
         post_id = table.get('id', '')[-9:]
         if post_id in thread_info['parsed_messages']:
             continue
-        post_dict = __parse_post_table(thread_info, post_id, table, post_processor)
+        post_dict = __parse_post_metadata(thread_info, post_id, table)
+        # I want to have the message metadata in the dictionary before calling the post-processor
+        thread_info['parsed_messages'][post_id] = post_dict
+
+        saved_message = table.select_one(post_text_selector) if not post_processor else \
+            post_processor.process_message(thread_info=thread_info, post_id=post_id,
+                                           message=table.select_one(post_text_selector))
+        thread_info['parsed_messages'][post_id]['message'] = saved_message
+
         if post_dict and ((not filter_obj) or (filter_obj and (filter_obj.filter_message(post_id, post_dict)))):
-            thread_info['parsed_messages'][post_id] = post_dict
             thread_info['last_message'] = post_dict.get('index', 0)
+        else:
+            thread_info['parsed_messages'].pop(post_id)
         __update_thread_info(post_id, thread_info, post_dict)
         __update_thread_timestamps(thread_info, soup)
 
 
-def __get_next_url(soup, current_url):
+def __get_next_url(soup):
     next_link = soup.select_one('a[rel="next"]')
-    if next_link:
-        return f"{vbulletin_session.base_url}{next_link.get('href', '')}"
-    return ''
-
-
-def __get_post_HTML(table):
-    return table.select_one(post_text_selector)
-    # if vbulletin_session.config['VBULLETIN'].get('output_format') == 'BBCode':
+    return f"{vbulletin_session.base_url}{next_link.get('href', '')}" if next_link else ''
 
 
 def __get_post_date(table):
@@ -239,11 +240,11 @@ def __get_user_id_and_name(table, post_id):
 
 
 def __get_user_avatar(table):
-    user_avatar = table.select_one(user_avatar_selector)
+    user_avatar = table.select_one('img#fcterremoto')
     return user_avatar.get('src', '') if user_avatar else ''
 
 
-def __parse_post_table(thread_info, post_id, table, post_processor):
+def __parse_post_metadata(thread_info, post_id, table):
     post_date = __get_post_date(table)
     post_index, post_link = __get_post_index_and_link(table)
     user_id, user_name = __get_user_id_and_name(table, post_id)
@@ -251,8 +252,6 @@ def __parse_post_table(thread_info, post_id, table, post_processor):
     # user_extra_info = table.select_one('tr:nth-child(2) > td.alt2 > div.smallfont:nth-of-type(2)')
     # user_reg_date = table.select_one(user_registration_date_selector)
     # user_location = table.select_one(user_location_selector)
-    saved_message = __get_post_HTML(table) if not post_processor else \
-        post_processor.process_message(thread_info=thread_info, post_id=post_id, message=__get_post_HTML(table))
     return {
         'author': {
             'id': user_id,
@@ -264,7 +263,7 @@ def __parse_post_table(thread_info, post_id, table, post_processor):
         'date': post_date,
         'link': post_link,
         'title': __get_post_title(table),
-        'message': saved_message
+        'message': None
     }
 
 

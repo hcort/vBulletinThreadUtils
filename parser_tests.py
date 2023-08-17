@@ -38,7 +38,8 @@ import pickle
 from tqdm import tqdm
 
 from vBulletinThreadUtils.MessageFilter import MessageFilterByAuthor
-from vBulletinThreadUtils.MessageProcessor import MessageHTMLToBBCode, MessageHTMLToText, MessageHTMLToPlainText
+from vBulletinThreadUtils.MessageProcessor import MessageHTMLToBBCode, MessageHTMLToText, MessageHTMLToPlainText, \
+    MessageHTMLToHTMLFile
 from vBulletinThreadUtils.ProgressVisor import ProgressVisor
 from vBulletinThreadUtils.vBulletinFileUtils import save_parse_result_as_file
 from vBulletinThreadUtils.vBulletinSession import vbulletin_session
@@ -80,18 +81,13 @@ def simple_thread_parsing():
         We use the save_to_index=False to tell the method not to create or update the
         index file.
     """
-    thread_info = thread_id_to_thread_link_dict('8634355')
+    thread_info = thread_id_to_thread_link_dict('9323203')
     progress_bar = ProgressVisorTQDM(thread_info['url'])
     if not vbulletin_session.output_dir:
         vbulletin_session.output_dir = './output/'
-    parse_thread(thread_info=thread_info, filter_obj=None, progress=progress_bar)
-    save_parse_result_as_file(thread_info=thread_info, save_to_index=False)
-    # save the thread using a message processor
-    # try:
-    #     with MessageHTMLToHTMLFile() as message_processor:
-    #         parse_thread(thread_info=thread_info, filter_obj=None, progress=progress_bar, post_processor=message_processor)
-    # except Exception as ex:
-    #     print(f'{ex}')
+    processor = MessageHTMLToHTMLFile()
+    parse_thread(thread_info=thread_info, filter_obj=None, progress=progress_bar, post_processor=processor)
+    # save_parse_result_as_file(thread_info=thread_info, save_to_index=False)
 
 
 def simple_thread_parsing_with_index_file():
