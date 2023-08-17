@@ -2,7 +2,7 @@ from bs4 import Tag
 
 from vBulletinThreadUtils.html2bbcode import parse_children_in_node
 from vBulletinThreadUtils.vBulletinFileUtils import close_thread_file, open_thread_file, get_thread_file_name, \
-    write_message_to_thread_file, write_str_to_thread_file, write_message_to_thread_file_only_html_tag
+    write_message_to_thread_file
 
 
 class MessageProcessor(object):
@@ -68,6 +68,23 @@ class MessageHTMLToBBCode(MessageProcessor):
         return parse_children_in_node(message)
 
 
+def write_message_to_thread_file_only_html_tag(thread_file, thread_info, message_id, message_as_tag):
+    """
+        This is used by MessageHTMLToHTMLFile to write HTML files
+
+
+    :param thread_file:
+    :param thread_id:
+    :param message_id:
+    :param message_as_tag:
+    :return:
+    """
+    # don't want to change the thread metadata
+    message = dict(thread_info['parsed_messages'][message_id])
+    message['message'] = message_as_tag
+    write_message_to_thread_file(thread_file, thread_info['id'], message_id, message)
+
+
 class MessageHTMLToHTMLFile(MessageProcessor):
     """
         This class should work as the vBulletinFileUtils.save_parse_result_as_file
@@ -82,6 +99,7 @@ class MessageHTMLToHTMLFile(MessageProcessor):
     def __init__(self):
         self.__has_all_data = False
         self.__first_message = None
+        self.__first_message_id = ''
         self.__thread_file = None
         self.__thread_file_name = ''
 
@@ -96,20 +114,16 @@ class MessageHTMLToHTMLFile(MessageProcessor):
         if not self.__has_all_data:
             if not self.__first_message:
                 self.__first_message = message
+                self.__first_message_id = post_id
             else:
                 self.__thread_file_name = get_thread_file_name(thread_id=thread_info['id'],
-                                                               thread_name=thread_info['title'])
+                                                                 thread_name=thread_info['title'])
                 self.__thread_file = open_thread_file(thread_filename=self.__thread_file_name,
-                                                      thread_name=thread_info['title'])
-                # write_message_to_thread_file(self.__thread_file, thread_info['id'], post_id, self.__first_message)
-                # write_message_to_thread_file(self.__thread_file, thread_info['id'], post_id, message)
-                # write_str_to_thread_file(thread_file=self.__thread_file,
-                #                          table_str=self.__first_message.prettify(formatter="minimal"))
-                # write_str_to_thread_file(thread_file=self.__thread_file,
-                #                          table_str=message.prettify(formatter="minimal"))
-                write_message_to_thread_file_only_html_tag(self.__thread_file, thread_info['id'], post_id, self.__first_message)
-                write_message_to_thread_file_only_html_tag(self.__thread_file, thread_info['id'], post_id, message)
+                                                        thread_name=thread_info['title'])
+                write_message_to_thread_file_only_html_tag(
+                    self.__thread_file, thread_info, self.__first_message_id, self.__first_message)
+                write_message_to_thread_file_only_html_tag(self.__thread_file, thread_info, post_id, message)
                 self.__has_all_data = True
                 self.__first_message = None
         else:
-            write_message_to_thread_file_only_html_tag(self.__thread_file, thread_info['id'], post_id, message)
+            write_message_to_thread_file_only_html_tag(self.__thread_file, thread_info, post_id, message)
