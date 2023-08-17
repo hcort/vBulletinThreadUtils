@@ -221,8 +221,7 @@ def fix_links_to_user_profiles(html_node):
             link.attrs['href'] = vbulletin_session.base_url + link.attrs.get('href', '')
 
 
-def fix_quotes_links(thread_id, message):
-    mess_content = message.get('message', None)
+def fix_quotes_links(thread_id, mess_content):
     if not mess_content:
         return
     """
@@ -234,23 +233,25 @@ def fix_quotes_links(thread_id, message):
     fix_links_to_this_thread(thread_id, html_node)
     fix_links_to_posts_in_this_thread(html_node)
     fix_links_to_user_profiles(html_node)
-    return message.prettify(formatter="minimal")
+    return mess_content.prettify(formatter="minimal")
 
 
-def save_all_images_in_message(message):
-    # FIXME
-    if vbulletin_session.config['VBULLETIN'].get('save_images', '') == 'True':
-        all_imgs = message.find_all('img', recursive=True)
-        for img in all_imgs:
-            src_txt = img['src']
-            if not img.get('src_old', None):
-                # some nodes are parsed more than once (!) hack to detect this
-                img['src'] = save_image(src_txt)
-                img['src_old'] = src_txt
+def write_message_to_thread_file_only_html_tag(thread_file, thread_id, message_id, message_as_tag):
+    message = {
+        'date': '',
+        'index': '',
+        'author': {
+            'id': '',
+            'username': '',
+            'avatar': ''
+        },
+        'message': message_as_tag
+    }
+    write_message_to_thread_file(thread_file, thread_id, message_id, message)
 
 
 def write_message_to_thread_file(thread_file, thread_id, message_id, message):
-    fixed_message = fix_quotes_links(thread_id, message)
+    fixed_message = fix_quotes_links(thread_id, mess_content=message.get('message', None))
     message = full_message_template.format(
         base_url=vbulletin_session.base_url,
         anchor_name=message_id,

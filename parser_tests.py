@@ -80,12 +80,18 @@ def simple_thread_parsing():
         We use the save_to_index=False to tell the method not to create or update the
         index file.
     """
-    thread_info = thread_id_to_thread_link_dict('9036759')
+    thread_info = thread_id_to_thread_link_dict('8634355')
     progress_bar = ProgressVisorTQDM(thread_info['url'])
-    parse_thread(thread_info=thread_info, filter_obj=None, progress=progress_bar)
     if not vbulletin_session.output_dir:
         vbulletin_session.output_dir = './output/'
+    parse_thread(thread_info=thread_info, filter_obj=None, progress=progress_bar)
     save_parse_result_as_file(thread_info=thread_info, save_to_index=False)
+    # save the thread using a message processor
+    # try:
+    #     with MessageHTMLToHTMLFile() as message_processor:
+    #         parse_thread(thread_info=thread_info, filter_obj=None, progress=progress_bar, post_processor=message_processor)
+    # except Exception as ex:
+    #     print(f'{ex}')
 
 
 def simple_thread_parsing_with_index_file():
@@ -101,11 +107,29 @@ def simple_thread_parsing_with_index_file():
         file under output_dir/saved_threads.html
     """
     thread_list = [
-        thread_id_to_thread_link_dict('8959315'),
-        thread_id_to_thread_link_dict('8987314'),
-        thread_id_to_thread_link_dict('9012387'),
-        thread_id_to_thread_link_dict('9040036'),
+        thread_id_to_thread_link_dict('8728235'),
+        thread_id_to_thread_link_dict('9143019'),
+        thread_id_to_thread_link_dict('8439635'),
+        thread_id_to_thread_link_dict('9043607'),
+        thread_id_to_thread_link_dict('8917520'),
+        thread_id_to_thread_link_dict('8816597'),
+        thread_id_to_thread_link_dict('8665649'),
+        thread_id_to_thread_link_dict('9126570'),
+        thread_id_to_thread_link_dict('9113133'),
+        thread_id_to_thread_link_dict('8897114'),
+        thread_id_to_thread_link_dict('8634355'),
+        thread_id_to_thread_link_dict('8949852'),
+        thread_id_to_thread_link_dict('8649729'),
+        thread_id_to_thread_link_dict('8747606'),
+        thread_id_to_thread_link_dict('8927621'),
+        thread_id_to_thread_link_dict('8874296'),
+        thread_id_to_thread_link_dict('9130507'),
         thread_id_to_thread_link_dict('9067043')
+        # thread_id_to_thread_link_dict('8959315'),
+        # thread_id_to_thread_link_dict('8987314'),
+        # thread_id_to_thread_link_dict('9012387'),
+        # thread_id_to_thread_link_dict('9040036'),
+        # thread_id_to_thread_link_dict('9067043')
     ]
     if not vbulletin_session.output_dir:
         vbulletin_session.output_dir = './output/'
@@ -124,7 +148,7 @@ def thread_parsing_with_filter_by_post_author():
         The filter object is a simple filter by post author
     """
     thread_info = thread_id_to_thread_link_dict('9036759')
-    filter_obj = MessageFilterByAuthor('castelo')
+    filter_obj = MessageFilterByAuthor('...')
     parse_thread(thread_info=thread_info, filter_obj=filter_obj)
     if not vbulletin_session.output_dir:
         vbulletin_session.output_dir = './output/'
@@ -181,9 +205,7 @@ def thread_search_and_parse_convert_messages_to_PlainText():
         with open(os.path.join(vbulletin_session.output_dir, 'search.pickle'), 'rb') as file:
             link_list = pickle.load(file)
     message_processor = MessageHTMLToPlainText()
-    # filter_obj = MessageFilterByAuthor('eugim')
-    # vbulletin_session.output_dir = './output/fraude/'
-    filter_obj = MessageFilterByAuthor('kaplane')
+    filter_obj = MessageFilterByAuthor('...')
     for thread in link_list['links']:
         thread_info = thread_id_to_thread_link_dict(thread['id'])
         json_file = os.path.join(vbulletin_session.output_dir, f'{thread_info["id"]}.json')
@@ -196,8 +218,8 @@ def thread_search_and_parse_convert_messages_to_PlainText():
 def thread_parsing_convert_messages_to_PlainText():
     thread_info = thread_id_to_thread_link_dict('8865750')
     message_processor = MessageHTMLToPlainText()
-    filter_obj = MessageFilterByAuthor('eugim')
-    vbulletin_session.output_dir = './output/fraude_mayor/'
+    filter_obj = MessageFilterByAuthor('...')
+    vbulletin_session.output_dir = './output/plain_text/'
     parse_thread(thread_info=thread_info, filter_obj=filter_obj, post_processor=message_processor)
     with open(os.path.join(vbulletin_session.output_dir,
                            f'{thread_info["id"]}.json'), 'w', encoding='utf-8') as json_file:
@@ -209,27 +231,21 @@ def thread_parsing_save_to_json_file():
         In this test we store the parsing result as a json file instead of generating an HTML
         output similar to the parsed thread.
     """
-    thread_ids = ['8875858', '6916796']
+    thread_ids = ['9580321', '9470612', '9605789', '9402444']
     thread_list = [thread_id_to_thread_link_dict(thread_id) for thread_id in thread_ids]
     if not vbulletin_session.output_dir:
         vbulletin_session.output_dir = './output/'
     filter_obj = MessageFilterByAuthor('@OP')
-    bs4_tag_to_str = MessageHTMLToText()
-    bs4_tag_to_bbcode = MessageHTMLToBBCode()
     for item in thread_list:
-        parse_thread(thread_info=item, filter_obj=filter_obj)
-        for msg in item['parsed_messages']:
-            bs4_tag = item['parsed_messages'][msg]['message']
-            msg_as_text = bs4_tag_to_str.process_message('', bs4_tag)
-            msg_as_bbcode = bs4_tag_to_bbcode.process_message('', bs4_tag)
-            item['parsed_messages'][msg]['message'] = None
-            item['parsed_messages'][msg]['html_str'] = msg_as_text
-            item['parsed_messages'][msg]['bbcode'] = msg_as_bbcode
+        parse_thread(thread_info=item, filter_obj=None, post_processor=MessageHTMLToText())
         with open(os.path.join(vbulletin_session.output_dir, f'{item["id"]}.json'), 'w', encoding='utf-8') as json_file:
             json.dump(item, json_file)
 
 
 def main():
+    # from vBulletinThreadUtils.vBulletinLoginSelenium import test_driver
+    # test_driver()
+    # create_list_and_delete()
     simple_thread_parsing()
     # simple_thread_parsing_with_index_file()
     # thread_parsing_convert_messages_to_BBCode()

@@ -158,13 +158,6 @@ post_index_selector = 'tr:nth-child(1) > td.thead:nth-child(2) > a'
 regex_page_number = re.compile("page=([0-9]+)")
 
 
-def __parse_message_by_index(last_parsed_message, index):
-    if not last_parsed_message:
-        return True
-    else:
-        return int(index) > int(last_parsed_message)
-
-
 def __update_thread_timestamps(thread_info, soup):
     if thread_info.get('creation_date', ''):
         return
@@ -183,16 +176,16 @@ def __update_thread_timestamps(thread_info, soup):
 
 
 def __search_and_parse_messages(thread_info, soup, filter_obj, current_url, post_processor):
-    last_parsed_message = thread_info.get('last_message', 0)
     all_posts_table = soup.select('div[id^="edit"] > table[id^="post"]')
     if not all_posts_table:
         print('Error in thread {} - No messages found'.format(current_url))
         return
     for table in all_posts_table:
         post_id = table.get('id', '')[-9:]
+        if post_id in thread_info['parsed_messages']:
+            continue
         post_dict = __parse_post_table(thread_info, post_id, table, post_processor)
-        if post_dict and __parse_message_by_index(last_parsed_message, post_dict['index']) \
-                and ((not filter_obj) or (filter_obj and (filter_obj.filter_message(post_id, post_dict)))):
+        if post_dict and ((not filter_obj) or (filter_obj and (filter_obj.filter_message(post_id, post_dict)))):
             thread_info['parsed_messages'][post_id] = post_dict
             thread_info['last_message'] = post_dict.get('index', 0)
         __update_thread_info(post_id, thread_info, post_dict)
@@ -200,11 +193,10 @@ def __search_and_parse_messages(thread_info, soup, filter_obj, current_url, post
 
 
 def __get_next_url(soup, current_url):
-    next_url = ''
     next_link = soup.select_one('a[rel="next"]')
     if next_link:
-        next_url = vbulletin_session.base_url + next_link.get('href', '')
-    return next_url if current_url != next_url else ''
+        return f"{vbulletin_session.base_url}{next_link.get('href', '')}"
+    return ''
 
 
 def __get_post_HTML(table):
@@ -259,7 +251,6 @@ def __parse_post_table(thread_info, post_id, table, post_processor):
     # user_extra_info = table.select_one('tr:nth-child(2) > td.alt2 > div.smallfont:nth-of-type(2)')
     # user_reg_date = table.select_one(user_registration_date_selector)
     # user_location = table.select_one(user_location_selector)
-    # user_car_info = table.select_one(user_car_info_selector)
     saved_message = __get_post_HTML(table) if not post_processor else \
         post_processor.process_message(thread_info=thread_info, post_id=post_id, message=__get_post_HTML(table))
     return {
@@ -268,7 +259,6 @@ def __parse_post_table(thread_info, post_id, table, post_processor):
             'username': user_name,
             'is_op': 'tborder-author' in table.attrs.get('class', []),
             'avatar': __get_user_avatar(table),
-            # TODO add user_extra_info, user_reg_date, user_location, user_car_info
         },
         'index': post_index,
         'date': post_date,
@@ -276,7 +266,6 @@ def __parse_post_table(thread_info, post_id, table, post_processor):
         'title': __get_post_title(table),
         'message': saved_message
     }
-    # check for desired output format
 
 
 def __get_page_number_from_url(url):

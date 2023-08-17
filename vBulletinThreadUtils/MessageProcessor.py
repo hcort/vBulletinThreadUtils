@@ -2,7 +2,7 @@ from bs4 import Tag
 
 from vBulletinThreadUtils.html2bbcode import parse_children_in_node
 from vBulletinThreadUtils.vBulletinFileUtils import close_thread_file, open_thread_file, get_thread_file_name, \
-    write_message_to_thread_file, write_str_to_thread_file
+    write_message_to_thread_file, write_str_to_thread_file, write_message_to_thread_file_only_html_tag
 
 
 class MessageProcessor(object):
@@ -23,6 +23,19 @@ class MessageProcessor(object):
 class MessageHTMLToText(MessageProcessor):
 
     def process_message(self, thread_info: dict, post_id: str, message: Tag):
+        return message.prettify(formatter="minimal")
+
+
+class MessageHTMLToTextAddingBorderToBlockquote(MessageProcessor):
+    """
+        This processor takes a message in XenForo format and adds a thin line
+        around the blockquote sections via inline css style
+    """
+
+    def process_message(self, thread_info: dict, post_id: str, message: Tag):
+        blockquotes = message.find_all('blockquote')
+        for blockquote in blockquotes:
+            blockquote['style'] = 'border-style: double;'
         return message.prettify(formatter="minimal")
 
 
@@ -90,11 +103,13 @@ class MessageHTMLToHTMLFile(MessageProcessor):
                                                       thread_name=thread_info['title'])
                 # write_message_to_thread_file(self.__thread_file, thread_info['id'], post_id, self.__first_message)
                 # write_message_to_thread_file(self.__thread_file, thread_info['id'], post_id, message)
-                write_str_to_thread_file(thread_file=self.__thread_file,
-                                         table_str=self.__first_message.prettify(formatter="minimal"))
-                write_str_to_thread_file(thread_file=self.__thread_file,
-                                         table_str=message.prettify(formatter="minimal"))
+                # write_str_to_thread_file(thread_file=self.__thread_file,
+                #                          table_str=self.__first_message.prettify(formatter="minimal"))
+                # write_str_to_thread_file(thread_file=self.__thread_file,
+                #                          table_str=message.prettify(formatter="minimal"))
+                write_message_to_thread_file_only_html_tag(self.__thread_file, thread_info['id'], post_id, self.__first_message)
+                write_message_to_thread_file_only_html_tag(self.__thread_file, thread_info['id'], post_id, message)
                 self.__has_all_data = True
                 self.__first_message = None
         else:
-            write_str_to_thread_file(thread_file=self.__thread_file, table_str=message.prettify(formatter="minimal"))
+            write_message_to_thread_file_only_html_tag(self.__thread_file, thread_info['id'], post_id, message)
