@@ -5,7 +5,6 @@ import re
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
-from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
@@ -25,7 +24,7 @@ re_author_from_link = re.compile("member.php\?u=(\d+)")
 re_thread_id_from_link = re.compile("thread_title_(\d+)")
 
 
-def get_links(base_url, soup, search_query='', strict_search=False):
+def get_links(soup, search_query='', strict_search=False):
     links = []
     all_threads_table = soup.select('td[id^="td_threadtitle_"] > div > a[id^="thread_title_"]')
     all_threads_authors = soup.select('td[id^="td_threadtitle_"] > div.smallfont')
@@ -39,7 +38,7 @@ def get_links(base_url, soup, search_query='', strict_search=False):
             links.append(
                 {
                     'id': thread_id,
-                    'url': base_url + 'showthread.php?t=' + thread_id,
+                    'url': vbulletin_session.base_url + 'showthread.php?t=' + thread_id,
                     'title': link[0].text,
                     'hover': link[0].attrs.get('title', ''),
                     'author': link[1].text.strip(),
@@ -54,13 +53,10 @@ def get_search_id(driver):
     return search_id.group(1) if search_id else ''
 
 
-def loop_search_results(driver, start_url):
+def loop_search_results(driver, start_url, search_query, strict_search):
     timeout = 50
     current_url = start_url
     first_search = True
-    base_url = vbulletin_session.base_url
-    search_query = vbulletin_session.search_words
-    strict_search = vbulletin_session.strict_search
     search_result = {'links': []}
     while current_url:
         if first_search:
@@ -77,7 +73,7 @@ def loop_search_results(driver, start_url):
             source = driver.page_source
             search_soup = BeautifulSoup(source, features="html.parser")
         if search_soup:
-            search_result['links'] += get_links(base_url=base_url, soup=search_soup,
+            search_result['links'] += get_links(soup=search_soup,
                                                 search_query=search_query, strict_search=strict_search)
             current_url = find_next(search_soup)
     return search_result
@@ -244,10 +240,9 @@ def import_cookies_from_session(driver):
         driver.add_cookie({'name': name, 'value': value})
 
 
-def search_selenium():
+def search_selenium(search_query, strict_search):
     # force login here before opening other driver
-    base_url = vbulletin_session.base_url
-    search_url = base_url + 'search.php?do=process'
+    search_url = vbulletin_session.base_url + 'search.php?do=process'
     os.environ['MOZ_HEADLESS'] = '1'
     driver = webdriver.Firefox()
     search_result = None
@@ -258,7 +253,10 @@ def search_selenium():
         fill_search_form(driver)
         element_present = EC.presence_of_element_located((By.ID, 'threadslist'))
         WebDriverWait(driver, timeout=1000).until(element_present)
-        search_result = loop_search_results(driver, start_url=search_url)
+        search_result = loop_search_results(driver,
+                                            start_url=search_url,
+                                            search_query=search_query,
+                                            strict_search=strict_search)
     except TimeoutException as ex:
         print('Error accessing {}: Timeout: {}'.format(search_url, str(ex)))
     except Exception as ex:
