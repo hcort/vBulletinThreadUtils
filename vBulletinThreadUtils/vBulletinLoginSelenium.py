@@ -44,6 +44,13 @@ def hijack_cookies(driver):
     return s
 
 
+def get_logged_in_cookie(driver):
+    for cookie in driver.get_cookies():
+        if cookie['name'] == 'bbimloggedin':
+            return cookie['value']
+    return 'no'
+
+
 def click_cookies_button(driver):
     timeout = 100
     element_present = EC.presence_of_element_located((By.CLASS_NAME, 'sd-cmp-3cRQ2'))
@@ -63,30 +70,22 @@ def VBulletinLoginSelenium(login_url='', login_data=None):
         The Selenium driver is closed after getting the cookies, as we proceed to the parsing+
         using Requests and Beautiful Soup
     """
+    s = None
     if not login_url or not login_data:
         return None
-    # os.environ['MOZ_HEADLESS'] = '1'
-    driver = webdriver.Firefox()
-    s = None
-    # selenium.common.exceptions.WebDriverException: Message: Service geckodriver unexpectedly exited. Status code
-    # was: 64 miro geckodriver.log geckodriver: error: Found argument '--websocket-port' which wasn't expected,
-    # or isn't valid in this context > actualizar geckodriver https://stackoverflow.com/a/70822145/4105601
     try:
-        do_login_and_wait(driver, login_url, login_data)
-        s = hijack_cookies(driver)
-        cookie_bbimloggedin = s.cookies.get('bbimloggedin', default='no')
-        if cookie_bbimloggedin == 'no':
-            print('cookie bbimloggedin no encontrada')
-    except TimeoutException as ex:
-        print('Error accessing {}: Timeout: {}'.format(login_url, str(ex)))
-    except Exception as ex:
-        print('Error accessing {}: Unknown error: {}'.format(login_url, str(ex)))
+        driver = create_driver_and_login(login_url, login_data)
+        if driver:
+            s = hijack_cookies(driver)
+            cookie_bbimloggedin = s.cookies.get('bbimloggedin', default='no')
+            if cookie_bbimloggedin == 'no':
+                print('cookie bbimloggedin no encontrada')
     finally:
         driver.close()
     return s
 
 
-def create_driver_and_login(login_url='', login_data=None):
+def create_driver_and_login(login_url='', login_data=None, webdriver_type='firefox'):
     """
     :param login_url: the url with the login form
     :param login_data: all the login data we need
@@ -94,13 +93,21 @@ def create_driver_and_login(login_url='', login_data=None):
     """
     if not login_url or not login_data:
         return None
-    os.environ['MOZ_HEADLESS'] = '1'
-    driver = webdriver.Firefox()
+    if webdriver_type == 'firefox':
+        # os.environ['MOZ_HEADLESS'] = '1'
+        driver = webdriver.Firefox()
+    elif webdriver_type == 'opera':
+        # https://stackoverflow.com/questions/55130791/how-to-enable-built-in-vpn-in-operadriver
+        # I use my user profile where I have activated the VPN
+        opera_profile = r'C:\Users\Héctor\AppData\Roaming\Opera Software\Opera Stable'
+        options = webdriver.ChromeOptions()
+        options.add_argument('user-data-dir=' + opera_profile)
+        # options._binary_location = r'C:\Users\Héctor\AppData\Local\Programs\Opera\\opera.exe'
+        driver = webdriver.Opera(options=options)
+    else:
+        exit('Unknown webdriver option')
     do_login_and_wait(driver, login_url, login_data)
-    logged_in = False
-    s = hijack_cookies(driver)
-    logged_in = s.cookies.get('bbimloggedin', default='no') == 'yes'
-    if not logged_in:
+    if get_logged_in_cookie(driver) != 'yes':
         print('cookie bbimloggedin no encontrada')
         driver.close()
         return None

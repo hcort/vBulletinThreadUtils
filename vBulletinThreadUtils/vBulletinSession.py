@@ -1,7 +1,7 @@
 import configparser
 import os
 
-from vBulletinThreadUtils.vBulletinLoginSelenium import VBulletinLogin, create_session_object
+from vBulletinThreadUtils.vBulletinLoginSelenium import VBulletinLogin, create_session_object, create_driver_and_login
 
 
 class VBulletinSession:
@@ -24,6 +24,7 @@ class VBulletinSession:
         self.__user_name = self.__config['VBULLETIN'].get('logname', '')
         self.__password = self.__config['VBULLETIN'].get('password', '')
         self.__base_url = self.__config['VBULLETIN'].get('base_url', '')
+        self.__driver = None
 
     @property
     def session(self):
@@ -87,6 +88,24 @@ class VBulletinSession:
             'vb_login_password': self.__password}
         # .../foro/misc.php?do=page&template=ident
         self.__session = VBulletinLogin(self.__base_url + 'misc.php?do=page&template=ident', login_data)
+
+    @property
+    def driver(self):
+        if not self.__driver:
+            if not self.__user_name or not self.__password:
+                print('Missing config entries: login data')
+                return
+            if not self.__base_url:
+                print('Missing config entries: base URL')
+                return
+            # This is the form data that the page sends when logging in
+            login_data = {
+                'vb_login_username': self.__user_name,
+                'vb_login_password': self.__password}
+            # .../foro/misc.php?do=page&template=ident
+            self.__driver = create_driver_and_login(login_url=self.__base_url + 'misc.php?do=page&template=ident',
+                                                    login_data=login_data)
+        return self.__driver
 
 
 vbulletin_session = VBulletinSession()
