@@ -15,6 +15,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 from vBulletinThreadUtils.vBulletinLoginSelenium import click_cookies_button, create_driver_and_login
 from vBulletinThreadUtils.vBulletinSession import vbulletin_session
+from vBulletinThreadUtils.vBulletinThreadParserGen import peek_thread_metadata, normalize_date_string_vbulletin_format
 
 
 def find_next(soup):
@@ -50,7 +51,9 @@ def get_links(soup, search_query='', strict_search=False):
                     'num_replies': link[2].text,
                     'last_poster': link[3].text.split()[-1],
                     'last_message_url': link[3].select('div>a')[1].get('href', ''),
-                    'last_message_date': f'{link[3].text.split()[0]} - {link[3].text.split()[1]}'
+                    # 'last_message_date': f'{link[3].text.split()[0]} - {link[3].text.split()[1]}'
+                    'last_message_date': normalize_date_string_vbulletin_format(
+                        link[3].text.split()[0], link[3].text.split()[1])
                 })
     return links
 
@@ -419,7 +422,7 @@ def search_with_posters_metadata():
     """
     driver = vbulletin_session.driver
     search_url = vbulletin_session.base_url + 'search.php?do=process'
-    search_query = '...'
+    search_query = 'viviendas'
     thread_list = fill_search_form(driver,
                      keyword=search_query, search_in_title=True,
                      author='', threads_started_by_user=False,
@@ -433,11 +436,12 @@ def search_with_posters_metadata():
                                             start_url=search_url,
                                             search_query=search_query,
                                             strict_search=False)
-        time.sleep(100)
+        time.sleep(10)
         for res in search_result['links']:
+            peek_thread_metadata(res)
             from vBulletinThreadUtils.vBulletinThreadPostersInfo import get_posters_from_thread
             posters = get_posters_from_thread(res['id'])
-            time.sleep(20)
+            time.sleep(10)
             res['posters'] = posters
         with open('./output/posters_file', 'w') as posters_file:
             json.dump(search_result, posters_file)

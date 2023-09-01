@@ -1,5 +1,6 @@
 import calendar
 import datetime
+from datetime import datetime, timedelta
 import locale
 import re
 
@@ -20,14 +21,55 @@ def thread_id_to_thread_link_dict(thread_id):
     :return: a thread_info dictionary in a format expected by the parse_thread method
     """
     return {
-                'id': thread_id,
-                'url': '{base}/showthread.php?t={thread_id}'.format(
-                    base=vbulletin_session.base_url, thread_id=thread_id),
-                'title': '',
-                'hover': '',
-                'author': '',
-                'author_id': ''
-            }
+        'id': thread_id,
+        'url': '{base}/showthread.php?t={thread_id}'.format(
+            base=vbulletin_session.base_url, thread_id=thread_id),
+        'title': '',
+        'hover': '',
+        'author': '',
+        'author_id': ''
+    }
+
+
+regex_message_id_number = re.compile("postmenu_([0-9]+)")
+
+
+def peek_thread_metadata(thread_info: dict):
+    """
+
+    :param thread_info:
+    :return: basic info about the thread, it does not parse any messages
+
+    Fields of thread_info filled:
+
+        thread_info['creation_date']
+        thread_info['modification_date']
+        thread_info['message_count']
+
+        thread_info['author']
+        thread_info['author_id']
+        thread_info['first_post_id']
+
+    """
+    thread_info['parsed_messages'] = {}
+    if not vbulletin_session.session or not thread_info.get('url', ''):
+        return None
+    current_page = vbulletin_session.session.get(thread_info['url'])
+    if current_page.status_code != requests.codes.ok:
+        print('Error getting {} - response code: {}'.format(thread_info['url'], current_page.status_code))
+        return
+    soup = BeautifulSoup(current_page.text, features="html.parser")
+    thread_info['title'] = soup.select_one('title').text
+    __update_thread_timestamps(thread_info=thread_info, soup=soup)
+
+    op_info = soup.select_one('div[id^="postmenu_"]')
+    if op_info:
+        thread_info['first_post_id'] = op_info.get('id').split('_')[-1]
+        if op_info.select_one('a'):
+            thread_info['author'] = op_info.select_one('a').get('href').split('=')[-1]
+            thread_info['author_id'] = op_info.select_one('a').text
+        else:
+            thread_info['author_id'] = op_info.text.strip()
 
 
 def parse_thread(thread_info: dict, filter_obj: MessageFilter = None, post_processor: MessageProcessor = None,
@@ -107,7 +149,7 @@ def parse_thread(thread_info: dict, filter_obj: MessageFilter = None, post_proce
     if not vbulletin_session.session or not current_url:
         return None
 
-    if progress and thread_info['last_page']:
+    if progress and thread_info.get('last_page', None):
         progress.update(n=thread_info["last_page"])
     while current_url:
         current_page = vbulletin_session.session.get(current_url)
@@ -160,6 +202,44 @@ post_index_selector = 'tr:nth-child(1) > td.thead:nth-child(2) > a'
 regex_page_number = re.compile("page=([0-9]+)")
 
 
+def normalize_date_string(date_string):
+    """
+
+    :param date_string: format = '2017-07-21T16:17:16+00:00'
+    :return: format = aaaa-mm-dd - hh:mm with hours and minutes corrected from UTC
+    """
+    parsed_time = datetime.strptime(date_string[:-6], '%Y-%m-%dT%H:%M:%S')
+    from time import altzone
+    diff_hour = altzone / 3600
+    offset_time = parsed_time - timedelta(hours=diff_hour)
+    return offset_time.strftime('%Y-%m-%d - %H:%M')
+
+
+month_replacement_number = {'ene': '01', 'feb': '02', 'mar': '03', 'abr': '04', 'may': '05', 'jun': '06',
+                            'jul': '07', 'ago': '08', 'sep': '09', 'oct': '10', 'nov': '11', 'dic': '12'}
+
+
+def normalize_date_string_vbulletin_format(vbulletin_date, hour_minutes):
+    """
+
+    :param hour_minutes: format = 'hh:mm'
+    :param vbulletin_date: 'dd-mmm-aaaa' / 'Hoy' / 'Ayer'
+        mmm are months in spanish
+    :return: format = aaaa-mm-dd - hh:mm
+    """
+    from datetime import date, timedelta
+    if vbulletin_date[0] == 'H':
+        return f"{date.today().strftime('%Y-%m-%d')} - {hour_minutes}"
+    elif vbulletin_date[0] == 'A':
+        yesterday = date.today() - timedelta(days=1)
+        return f"{yesterday.strftime('%Y-%m-%d')} - {hour_minutes}"
+    else:
+        month_num = month_replacement_number[vbulletin_date[3:6]]
+        return datetime.strptime(
+            f"{vbulletin_date.replace(vbulletin_date[3:6], month_num)} - {hour_minutes}", '%d-%m-%Y - %H:%M'
+        ).strftime('%Y-%m-%d - %H:%M')
+
+
 def __update_thread_timestamps(thread_info, soup):
     if thread_info.get('creation_date', ''):
         return
@@ -168,12 +248,28 @@ def __update_thread_timestamps(thread_info, soup):
     for data in all_script_data:
         type_pos = data.text.find(json_type_str, 30, 90)
         if type_pos >= 0:
+            first_message_time = normalize_date_string_vbulletin_format(
+                soup.select_one('table[id^="post"] > tr > td.thead').text.split(',')[0].strip(),
+                soup.select_one('table[id^="post"] > tr > td.thead').text.split(',')[-1].strip()
+            )
             regex_date_published = re.compile('datePublished":\s*"([\d\-T\+:]{25})').search(data.text)
             regex_date_modified = re.compile('dateModified":\s*"([\d\-T\+:]{25})').search(data.text)
             regex_interaction_count = re.compile('userInteractionCount":\s*"(\d+)"').search(data.text)
-            thread_info['creation_date'] = regex_date_published.group(1) if regex_date_published else ''
-            thread_info['modification_date'] = regex_date_modified.group(1) if regex_date_modified else ''
+            thread_info['creation_date'] = normalize_date_string(
+                regex_date_published.group(1)) if regex_date_published else ''
+            thread_info['modification_date'] = normalize_date_string(
+                regex_date_modified.group(1)) if regex_date_modified else ''
             thread_info['message_count'] = int(regex_interaction_count.group(1)) + 1 if regex_interaction_count else 0
+            if first_message_time != thread_info['creation_date']:
+                print(
+                    f"{thread_info['id']}: {first_message_time} - {thread_info['creation_date']} - {thread_info['modification_date']}")
+                delta_hour = datetime.datetime.strptime(first_message_time, '%d-%m-%Y - %H:%M') - \
+                             datetime.datetime.strptime(thread_info['creation_date'], '%d-%m-%Y - %H:%M')
+                thread_info['creation_date'] = first_message_time
+                thread_info['modification_date'] = \
+                    datetime.datetime.strptime(thread_info['modification_date'], '%d-%m-%Y - %H:%M') + delta_hour
+                print(
+                    f"{thread_info['id']}: {first_message_time} - {thread_info['creation_date']} - {thread_info['modification_date']}")
             return
 
 
@@ -216,9 +312,10 @@ def __get_post_date(table):
     # FIXME locale https://stackoverflow.com/questions/985505/locale-date-formatting-in-python
     if (date_time_str[0] == 'H') or (date_time_str[0] == 'A'):
         locale.setlocale(locale.LC_ALL, 'es_ES')
-        today = datetime.datetime.now()
+        today = datetime.now()
         dia = today.day if date_time_str[0] == 'H' else today.day - 1
-        return '{}-{}-{}, {}'.format(dia, calendar.month_name[today.month], today.year, date_time_str.split(',')[1])
+        # return '{}-{}-{}, {}'.format(dia, calendar.month_name[today.month], today.year, date_time_str.split(',')[1])
+        return f"{today.year}-{today.month}-{today.day} - {date_time_str.split(',')[1]}"
     else:
         return date_time_str
 
