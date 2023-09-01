@@ -1,3 +1,4 @@
+import io
 import os
 import re
 from urllib.parse import urlparse
@@ -38,6 +39,27 @@ def save_parse_result_as_file(thread_info, save_to_index=False, thread_index_fil
         __update_saved_threads_page(thread_info, thread_file_name, thread_index_file)
 
 
+def generate_minimal_index_file():
+    index_header = '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" ' \
+                   '"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html ' \
+                   'xmlns="http://www.w3.org/1999/xhtml" dir="ltr" lang="es"><head>' \
+                   '<meta name="robots" content="noarchive,noindex"/><meta http-equiv="Content-Type" ' \
+                   'content="text/html"/><meta charset="UTF-8"><title>Índice</title></head>' \
+                   '<body><table class="tborder" cellpadding="5" cellspacing="1" border="0" ' \
+                   'width="100%" align="center" id="threadslist"><tr><td class="thead" width="2%">&nbsp;</td>' \
+                   '<td class="thead" width="75%">Tema / Autor</td>' \
+                   '<td class="thead" width="150" align="center" nowrap="nowrap">Mensajes</td></tr>'
+    return io.StringIO(index_header)
+
+
+def get_index_file():
+    index_filename = os.path.join(vbulletin_session.config['VBULLETIN']['resources'], "search_index_header.txt")
+    if os.path.exists(index_filename):
+        return open(index_filename, "r")
+    else:
+        return generate_minimal_index_file()
+
+
 def __open_index_file(search_id=''):
     output_dir = vbulletin_session.output_dir
     if search_id:
@@ -49,7 +71,7 @@ def __open_index_file(search_id=''):
         os.remove(filename)
     # 'iso-8859-1', 'cp1252'
     index_file = open(filename, "a+", encoding='utf-8')
-    for line in open(os.path.join(vbulletin_session.config['VBULLETIN']['resources'], 'search_index_header.txt'), "r"):
+    for line in get_index_file():
         index_file.write(line)
     return index_file
 
@@ -57,15 +79,32 @@ def __open_index_file(search_id=''):
 def __create_saved_threads_file(filename):
     if not os.path.exists(filename):
         index_file = open(filename, "a+", encoding='utf-8')
-        for line in open(os.path.join(vbulletin_session.config['VBULLETIN']['resources'], 'search_index_header.txt'), "r"):
+        for line in get_index_file():
             index_file.write(line)
         index_file.write('</table></body></html>')
         index_file.close()
 
 
+def generate_minimal_entry_pattern():
+    entry_pattern = '<tr id="tr_thread_{id}"><td id="thread_{id}_idx" class="alt2">{idx_link}</td><td class="alt1" ' \
+                    'id="td_threadtitle_{id}" title="{hover}"><div><a href="{url}" id="thread_title_{id}">{title}</a>' \
+                    '<span class="smallfont" style="white-space:nowrap">{url}</span></div><div class="smallfont">' \
+                    '<a href="{url_base}member.php?u={author_id}">{author}</a></div></td><td class="alt2" ' \
+                    'title="Fichero"><div id="thread_{id}_msgcnt" class="smallfont" style="text-align:center; ' \
+                    'white-space:nowrap"><a href="{thread_file_name}"> {author_matches} mensajes</a></div></td></tr>'
+    return io.StringIO(entry_pattern)
+
+
+def get_pattern_file():
+    pattern_filename = os.path.join(vbulletin_session.config['VBULLETIN']['resources'], "index_file_entry_pattern.txt")
+    if os.path.exists(pattern_filename):
+        return open(pattern_filename, "r")
+    else:
+        return generate_minimal_entry_pattern()
+
+
 def __build_table_entry(num_link, thread_info, thread_file_name):
-    with open(os.path.join(vbulletin_session.config['VBULLETIN']['resources'], 'index_file_entry_pattern.txt'), 'r') \
-            as pattern_file:
+    with get_pattern_file() as pattern_file:
         entry_pattern = pattern_file.read()
         return entry_pattern.format(id=thread_info['id'], idx_link=num_link, url=thread_info['url'],
                                     title=thread_info['title'],
@@ -123,19 +162,40 @@ def get_thread_file_name(thread_id, thread_name):
     return file_name + '.html'
 
 
+def generate_minimal_header():
+    minimal_header = '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" ' \
+                     '"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html ' \
+                     'xmlns="http://www.w3.org/1999/xhtml" dir="ltr" lang="es"><head>' \
+                     '<meta http-equiv="Content-Type" content="text/html"/>' \
+                     '<meta charset="UTF-8">' \
+                     '<meta name="description" content="" />' \
+                     '<title></title>' \
+                     '</head><body onload=""><a name="top"></a>'
+    return io.StringIO(minimal_header)
+
+
+def get_header_file():
+    header_filename = os.path.join(vbulletin_session.config['VBULLETIN']['resources'], "page_header.txt")
+    if os.path.exists(header_filename):
+        return open(header_filename, "r")
+    else:
+        return generate_minimal_header()
+
+
 def open_thread_file(thread_filename, thread_name):
     thread_file = open(
         os.path.join(
             vbulletin_session.output_dir,
             thread_filename), "a+", encoding='utf-8')
-    for line in open(os.path.join(vbulletin_session.config['VBULLETIN']['resources'], "page_header.txt"), "r"):
-        if line.startswith('<meta name="description"'):
-            thread_file.write(
-                '<meta name=\"description\" content=\"{}\" />'.format(thread_name))
-        elif line.startswith('<title>'):
-            thread_file.write('<title>' + thread_name + '</title>')
-        else:
-            thread_file.write(line)
+    with get_header_file() as header_file:
+        for line in header_file:
+            if line.startswith('<meta name="description"'):
+                thread_file.write(
+                    '<meta name=\"description\" content=\"{}\" />'.format(thread_name))
+            elif line.startswith('<title>'):
+                thread_file.write('<title>' + thread_name + '</title>')
+            else:
+                thread_file.write(line)
     return thread_file
 
 
