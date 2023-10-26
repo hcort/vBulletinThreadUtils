@@ -5,8 +5,10 @@ from bs4 import BeautifulSoup, Tag
 
 from vBulletinThreadUtils import MessageFilter, MessageProcessor
 from vBulletinThreadUtils.ProgressVisor import ProgressVisor
-from vBulletinThreadUtils.utils import get_soup_requests, normalize_date_string_vbulletin_format, normalize_date_string, \
-    get_string_from_regex
+from vBulletinThreadUtils.utils import (get_soup_requests,
+                                        normalize_date_string_vbulletin_format,
+                                        normalize_date_string,
+                                        get_string_from_regex)
 from vBulletinThreadUtils.vBulletinSession import vbulletin_session
 
 
@@ -116,7 +118,7 @@ def parse_thread(thread_info: dict, filter_obj: MessageFilter = None, post_proce
         last_page = 3; last_message = 60
         typical vbulletin page has 25 messages so page number #3 will start with post #51
         The parser will NOT parse pages #1 and #2. It will start with page #3.
-        The parser will parse messages #51, #52, ..., #59 and #60 but it won't store them in the output. The
+        The parser will parse messages #51, #52, ..., #59 and #60, but it won't store them in the output. The
             first message in parsed_messages will be #61
 
     Each of these parsed messages has the following format:
@@ -158,7 +160,6 @@ def parse_thread(thread_info: dict, filter_obj: MessageFilter = None, post_proce
         next_url = __get_next_url(soup)
         # FIXME sometimes current_url is a "ghost page" that contains the same messages as the previous one
         current_url = next_url if next_url != current_url else None
-        __update_first_post_id_info(thread_info)
     __update_thread_timestamps(thread_info, soup)
 
 
@@ -197,13 +198,15 @@ def __update_thread_timestamps(thread_info: dict, soup: BeautifulSoup) -> None:
             thread_info['message_count'] = int(get_string_from_regex(regex_interaction_count, data.text))
 
             first_msg_id = thread_info.get('first_post_id', None)
-            first_message_time = thread_info['parsed_messages'][first_msg_id]['date'] if first_msg_id else thread_info['creation_date']
+            first_message_time = thread_info['parsed_messages'][first_msg_id]['date'] if first_msg_id else (
+                thread_info)['creation_date']
             if first_message_time != thread_info['creation_date']:
-                delta_hour = datetime.datetime.strptime(first_message_time, '%d-%m-%Y - %H:%M') - \
-                             datetime.datetime.strptime(thread_info['creation_date'], '%d-%m-%Y - %H:%M')
+                delta_hour = datetime.datetime.strptime(first_message_time, '%Y-%m-%d - %H:%M') - \
+                             datetime.datetime.strptime(thread_info['creation_date'], '%Y-%m-%d - %H:%M')
                 thread_info['creation_date'] = first_message_time
                 thread_info['modification_date'] = \
-                    datetime.datetime.strptime(thread_info['modification_date'], '%d-%m-%Y - %H:%M') + delta_hour
+                    (datetime.datetime.strptime(thread_info['modification_date'], '%Y-%m-%d - %H:%M') +
+                     delta_hour).strftime('%Y-%m-%d - %H:%M')
 
 
 def __get_post_title(msg: Tag) -> str:
@@ -225,6 +228,7 @@ def __remove_other_tags_from_msg(msg: Tag) -> None:
     :param msg: The Tag with the post content
     :return: Nothing
     """
+    decomposed_tags = 0
     for idx, child in enumerate(msg.children):
         if isinstance(child, Tag) and child.get('id', '').startswith('post_message_'):
             decomposed_tags = idx
@@ -254,7 +258,7 @@ def __get_post_author_info(user_info: Tag, post_user_is_op: bool = False) -> dic
 def __search_and_parse_messages(thread_info, soup, filter_obj, current_url, post_processor):
     """
         A message is composed of:
-            - User name
+            - Username
             - User profile URL (it has the user id in it)
             - User avatar URL
             - Date
@@ -303,6 +307,7 @@ def __search_and_parse_messages(thread_info, soup, filter_obj, current_url, post
                 thread_info['last_message'] = current_post.get('index', 0)
             else:
                 thread_info['parsed_messages'].pop(post_id)
+            __update_first_post_id_info(thread_info, post_id, current_post)
     except Exception as err:
         print(f'Error in thread {current_url} - {err}')
 
@@ -354,10 +359,14 @@ def __update_progress_bar(progress, soup):
     progress.update()
 
 
-def __update_first_post_id_info(thread_info):
+def __update_first_post_id_info(thread_info, post_id: str = None, post_dict: dict = None):
     if not thread_info.get('first_post_id', None):
-        post_id = next(iter(thread_info['parsed_messages']))
-        post_dict = thread_info['parsed_messages'][post_id]
+        if not thread_info.get('parsed_messages', None):
+            return
+        if not post_id:
+            post_id = next(iter(thread_info['parsed_messages']))
+        if not post_dict:
+            post_dict = thread_info['parsed_messages'][post_id]
         thread_info['first_post_id'] = post_id
         thread_info['title'] = post_dict.get('title')
         thread_info['author'] = post_dict.get('author', []).get('username')
