@@ -1,4 +1,14 @@
-class MessageFilter(object):
+"""
+    A MessageFilter is an object that tells the parser to store or not a given message
+
+    It must implement the interface MessageFilter, with the method filter_message that
+    returns a boolean
+
+    This method takes the post id and the last parsed message
+"""
+
+
+class MessageFilter:
     """
         Interface for all kinds of message filtering criteria
 

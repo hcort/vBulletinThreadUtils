@@ -1,7 +1,8 @@
+from vBulletinThreadUtils.MessageFilter import MessageFilter
+from vBulletinThreadUtils.vBulletinFileUtils import save_parse_result_as_file
 from vBulletinThreadUtils.vBulletinSearch import start_searching
 from vBulletinThreadUtils.vBulletinSession import vbulletin_session
-from vBulletinThreadUtils.vBulletinThreadParserGen import find_user_messages_in_thread_list, \
-    thread_id_to_thread_link_dict
+from vBulletinThreadUtils.vBulletinThreadParserGen import thread_id_to_thread_link_dict, parse_thread
 
 
 def create_link_list():
@@ -16,6 +17,25 @@ def create_link_list():
     else:
         link_list = start_searching()
     return link_list
+
+
+def find_user_messages_in_thread_list(links, username, thread_index_file=''):
+    num_links = len(links)
+    for idx, thread_item in enumerate(links):
+        try:
+            print('\n[' + str(idx + 1) + '/' + str(num_links) + '] - ' + str(thread_item))
+            # thread_name = link['title']
+            if username:
+                parse_thread(thread_info=thread_item, filter_obj=MessageFilter.MessageFilterByAuthor(username))
+            else:
+                parse_thread(thread_info=thread_item, filter_obj=None)
+            # save results
+            if vbulletin_session.config['VBULLETIN'].get('output_format', '') != 'BBCode':
+                save_parse_result_as_file(thread_item, save_to_index=True, thread_index_file=thread_index_file)
+            thread_item['parsed_messages'] = {}
+        except Exception as ex:
+            print('Error handling {}: {}'.format(thread_item['url'], str(ex)))
+            vbulletin_session.session_restart()
 
 
 def main():

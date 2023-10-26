@@ -108,28 +108,6 @@ def simple_thread_parsing_with_index_file():
     """
     thread_list = [
         thread_id_to_thread_link_dict('8728235'),
-        thread_id_to_thread_link_dict('9143019'),
-        thread_id_to_thread_link_dict('8439635'),
-        thread_id_to_thread_link_dict('9043607'),
-        thread_id_to_thread_link_dict('8917520'),
-        thread_id_to_thread_link_dict('8816597'),
-        thread_id_to_thread_link_dict('8665649'),
-        thread_id_to_thread_link_dict('9126570'),
-        thread_id_to_thread_link_dict('9113133'),
-        thread_id_to_thread_link_dict('8897114'),
-        thread_id_to_thread_link_dict('8634355'),
-        thread_id_to_thread_link_dict('8949852'),
-        thread_id_to_thread_link_dict('8649729'),
-        thread_id_to_thread_link_dict('8747606'),
-        thread_id_to_thread_link_dict('8927621'),
-        thread_id_to_thread_link_dict('8874296'),
-        thread_id_to_thread_link_dict('9130507'),
-        thread_id_to_thread_link_dict('9067043')
-        # thread_id_to_thread_link_dict('8959315'),
-        # thread_id_to_thread_link_dict('8987314'),
-        # thread_id_to_thread_link_dict('9012387'),
-        # thread_id_to_thread_link_dict('9040036'),
-        # thread_id_to_thread_link_dict('9067043')
     ]
     if not vbulletin_session.output_dir:
         vbulletin_session.output_dir = './output/'
@@ -196,7 +174,7 @@ def thread_search_and_parse_convert_messages_to_PlainText():
     vbulletin_session.subforum_id = '23'
     vbulletin_session.minimum_posts = '1000'
     vbulletin_session.output_dir = './output/oraculo/'
-    if not os.path.exists(os.path.join(vbulletin_session.output_dir, 'searchu.pickle')):
+    if not os.path.exists(os.path.join(vbulletin_session.output_dir, 'search.pickle')):
         from vBulletinThreadUtils.vBulletinSearch import start_searching
         link_list = start_searching()
         with open(os.path.join(vbulletin_session.output_dir, 'search.pickle'), 'wb') as file:
@@ -237,7 +215,8 @@ def thread_parsing_save_to_json_file():
         vbulletin_session.output_dir = './output/'
     filter_obj = MessageFilterByAuthor('@OP')
     for item in thread_list:
-        parse_thread(thread_info=item, filter_obj=None, post_processor=MessageHTMLToText())
+        progress_bar = ProgressVisorTQDM(item['url'])
+        parse_thread(thread_info=item, filter_obj=None, post_processor=MessageHTMLToText(), progress=progress_bar)
         with open(os.path.join(vbulletin_session.output_dir, f'{item["id"]}.json'), 'w', encoding='utf-8') as json_file:
             json.dump(item, json_file)
 
@@ -246,12 +225,15 @@ def main():
     # from vBulletinThreadUtils.vBulletinLoginSelenium import test_driver
     # test_driver()
     # create_list_and_delete()
-    simple_thread_parsing()
+    # simple_thread_parsing()
+    # thread_info = thread_id_to_thread_link_dict('9323203')
+    # from vBulletinThreadUtils.vBulletinThreadParserGen import peek_thread_metadata
+    # peek_thread_metadata(thread_info)
     # simple_thread_parsing_with_index_file()
     # thread_parsing_convert_messages_to_BBCode()
     # thread_parsing_convert_messages_to_PlainText()
     # thread_search_and_parse_convert_messages_to_PlainText()
-    # thread_parsing_save_to_json_file()
+    thread_parsing_save_to_json_file()
 
 
 if __name__ == "__main__":
