@@ -1,19 +1,15 @@
 # beautiful soup for HTML parsing
 import json
-import os
 import re
 import time
 
 from bs4 import BeautifulSoup
-from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.select import Select
 from selenium.webdriver.support.ui import WebDriverWait
 
-from vBulletinThreadUtils.vBulletinLoginSelenium import click_cookies_button, create_driver_and_login
 from vBulletinThreadUtils.vBulletinSession import vbulletin_session
 from vBulletinThreadUtils.vBulletinThreadParserGen import peek_thread_metadata, normalize_date_string_vbulletin_format
 
@@ -90,164 +86,18 @@ def loop_search_results(driver, start_url, search_query, strict_search):
     return search_result
 
 
-regex_post_id = re.compile("p=(\d+)")
-
-
-def search_results_no_parser(driver,
-                             search_url,
-                             keyword='',
-                             author='',
-                             time_limit='365',
-                             older_than=True,
-                             ascending=True,
-                             subforum='2'):
+def fill_search_form_all_parameters(driver,
+                                    keyword: str = '',
+                                    search_in_title: bool = False,
+                                    author: str = '', threads_started_by_user: bool = False,
+                                    reply_number: str = '', max_messages: bool = False,
+                                    time_limit: str = '365', older_than: bool = True,
+                                    order_type: str = 'lastpost', ascending: bool = True,
+                                    show_as_messages: bool = True,
+                                    subforum: str = '23') -> bool:
     """
-    :param driver: the Selenium driver
-    :param search_url:
-    :param keyword: search keywords
-    :param author: search messages by author
-    :param time_limit: search option
-    :param older_than: search option
-    :param ascending: search option
-    :param subforum: search option
-
-    :return: A list of messages found
-
-        This method iterates over the search results and extracts the links to the messages without parsing
-
-        See search_selenium and get_links for a search method that parses the results and extracts the messages
-        as a dictionary object
-    """
-    driver.get(search_url)
-    has_results = fill_search_form_old_messages_by_author(driver, keyword=keyword, author=author, time_limit=time_limit,
-                                                          older_than=older_than,
-                                                          ascending=ascending, subforum=subforum)
-    if not has_results:
-        return
-    # element_present = EC.presence_of_element_located((By.ID, 'threadslist'))
-    # WebDriverWait(driver, timeout=1000).until(element_present)
-    timeout = 50
-    current_url = '-'
-    messages_found = []
-    while current_url:
-        try:
-            element_present = EC.presence_of_element_located((By.ID, 'threadslist'))
-            WebDriverWait(driver, timeout).until(element_present)
-            element_present = driver.find_element(By.ID, 'inlinemodform')
-            for table in element_present.find_elements_by_xpath(".//table[starts-with(@id, 'post')]"):
-                titulo = table.find_element(By.CSS_SELECTOR, 'td.alt1 a').text
-                href = table.find_element(By.CSS_SELECTOR, 'div.alt2 a').get_attribute('href')
-                post_id_r = regex_post_id.search(href)
-                post_id = post_id_r.group(1) if post_id_r else ''
-                # print('----------------------------------------------------------------------------------------------')
-                # print(titulo)
-                # print(table.find_element(By.CLASS_NAME, 'alt2').text[:150])
-                # print(href)
-                # print('----------------------------------------------------------------------------------------------')
-                messages_found.append(href)
-            element = driver.find_element(By.LINK_TEXT, '>')
-            current_url = element.get_attribute('href')
-            driver.get(current_url)
-        except Exception as err:
-            print(f'Error procesando la lista de mensajes - {str(err)}')
-            current_url = None
-    return messages_found
-
-
-def fill_search_form(driver):
-    try:
-        subforum_select = Select(driver.find_element(By.NAME, "forumchoice[]"))
-        subforum_select.select_by_value('23')
-        title_only_select = Select(driver.find_element(By.CSS_SELECTOR, "select[name=titleonly]"))
-        title_only_select.select_by_value('1')  # 0: search in msg, 1: search in title
-        thread_starter_select = Select(driver.find_element(By.CSS_SELECTOR, "select[name=starteronly]"))
-        thread_starter_select.select_by_value('1')
-    except Exception as err:
-        print(str(err))
-    minimum_message_field = driver.find_element(By.CSS_SELECTOR, 'div#collapseobj_search_adv table.panel tbody tr '
-                                                                 'td:nth-of-type(1) fieldset.fieldset div '
-                                                                 'input.bginput')
-    minimum_message_field = driver.find_element(By.NAME, 'replylimit')
-    minimum_message_field.send_keys(vbulletin_session.minimum_posts)
-    search_query_input = driver.find_element(By.CSS_SELECTOR, 'td.panelsurround > table.panel > tbody > tr > '
-                                                              'td:nth-of-type(1) fieldset.fieldset table tbody tr '
-                                                              'td div input.bginput')
-    search_query = vbulletin_session.search_words
-    search_query_input.send_keys(search_query)
-    thread_author_field = driver.find_element(By.ID, "userfield_txt")
-    thread_author = vbulletin_session.search_user
-    thread_author_field.send_keys(thread_author)
-    thread_author_field.send_keys(Keys.RETURN)
-
-
-def fill_search_form_old_messages_by_author(driver, keyword='', author='', time_limit='365', older_than=True,
-                                            ascending=True, subforum='2'):
-    """
-    :param driver: the Selenium driver
-    :param keyword: search keywords
-    :param author: search messages by author
-    :param time_limit: search option
-    :param older_than: search option
-    :param ascending: search option
-    :param subforum: search option
-    :return:
-    """
-    thread_list_present = False
-    try:
-        # subforum_select = Select(driver.find_element(By.NAME, "forumchoice[]"))
-        # subforum_select.select_by_value(subforum)
-        # title_only_select = Select(driver.find_element(By.CSS_SELECTOR, "select[name=titleonly]"))
-        # title_only_select.select_by_value('1')  # 0: search in msg, 1: search in title
-        # thread_starter_select = Select(driver.find_element(By.CSS_SELECTOR, "select[name=starteronly]"))
-        # thread_starter_select.select_by_value('1')
-        # minimum_message_field = driver.find_element(By.CSS_SELECTOR, 'div#collapseobj_search_adv table.panel tbody tr '
-        #                                                              'td:nth-of-type(1) fieldset.fieldset div '
-        #                                                              'input.bginput')
-        # minimum_message_field = driver.find_element(By.NAME, 'replylimit')
-        # minimum_message_field.send_keys(vbulletin_session.minimum_posts)
-
-        # actions = ActionChains(driver)
-        # actions.move_to_element(element)
-        # actions.perform()
-        search_by_date_select = Select(driver.find_element(By.NAME, 'searchdate'))
-        search_by_date_select.select_by_value(time_limit)
-        if older_than:
-            older_newer_select = Select(driver.find_element(By.NAME, 'beforeafter'))
-            older_newer_select.select_by_value('before')
-        if ascending:
-            order_messages_select = Select(driver.find_element(By.NAME, 'order'))
-            order_messages_select.select_by_value('ascending')
-        show_messages_radio = driver.find_element(By.ID, 'rb_showposts_1')
-        driver.execute_script("return arguments[0].scrollIntoView();", show_messages_radio)
-        show_messages_radio.click()
-        search_query_input = driver.find_element(By.CSS_SELECTOR, 'td.panelsurround > table.panel > tbody > tr > '
-                                                                  'td:nth-of-type(1) fieldset.fieldset table tbody tr '
-                                                                  'td div input.bginput')
-        search_query_input.send_keys(keyword)
-        thread_author_field = driver.find_element(By.ID, "userfield_txt")
-        thread_author_field.send_keys(author)
-        thread_author_field.send_keys(Keys.RETURN)
-        thread_author_field.send_keys(Keys.RETURN)
-        timeout = 20
-        element_present = EC.presence_of_element_located((By.ID, 'threadslist'))
-        WebDriverWait(driver, timeout).until(element_present)
-        thread_list_present = True
-    except TimeoutException as err:
-        print(f'No se han encontrado resultados - Búsqueda *{keyword}* - *{author}*')
-    except Exception as err:
-        print(f'Se ha producido un error en la búsqueda: str(err)- Búsqueda *{keyword}* - *{author}*')
-    return thread_list_present
-
-
-def fill_search_form(driver,
-                     keyword='', search_in_title=False,
-                     author='', threads_started_by_user=False,
-                     reply_number='', max_messages=False,
-                     time_limit='365', older_than=True,
-                     order_type='lastpost', ascending=True,
-                     show_as_messages=True,
-                     subforum='23'):
-    """
+    :param max_messages:
+    :param reply_number:
     :param threads_started_by_user:
     :param search_in_title:
     :param order_type:
@@ -266,22 +116,6 @@ def fill_search_form(driver,
     search_url = vbulletin_session.base_url + 'search.php'
     driver.get(search_url)
     try:
-        # subforum_select = Select(driver.find_element(By.NAME, "forumchoice[]"))
-        # subforum_select.select_by_value(subforum)
-        # title_only_select = Select(driver.find_element(By.CSS_SELECTOR, "select[name=titleonly]"))
-        # title_only_select.select_by_value('1')  # 0: search in msg, 1: search in title
-        # thread_starter_select = Select(driver.find_element(By.CSS_SELECTOR, "select[name=starteronly]"))
-        # thread_starter_select.select_by_value('1')
-        # minimum_message_field = driver.find_element(By.CSS_SELECTOR, 'div#collapseobj_search_adv table.panel tbody tr '
-        #                                                              'td:nth-of-type(1) fieldset.fieldset div '
-        #                                                              'input.bginput')
-        # minimum_message_field = driver.find_element(By.NAME, 'replylimit')
-        # minimum_message_field.send_keys(vbulletin_session.minimum_posts)
-
-        # actions = ActionChains(driver)
-        # actions.move_to_element(element)
-        # actions.perform()
-
         # keywords
         search_query_input = driver.find_elements(By.NAME, 'query')[2]
         search_query_input.send_keys(keyword)
@@ -356,23 +190,37 @@ def import_cookies_from_session(driver):
         driver.add_cookie({'name': name, 'value': value})
 
 
-def search_selenium(search_query, strict_search):
+def search_selenium(driver=None,
+                    search_query: str = '',
+                    strict_search: bool = False,
+                    search_in_title: bool = False,
+                    author: str = '', threads_started_by_user: bool = False,
+                    reply_number: str = '', max_messages: bool = False,
+                    time_limit: str = '365', older_than: bool = True,
+                    order_type: str = 'lastpost', ascending: bool = True,
+                    show_as_messages: bool = True,
+                    subforum: str = '23') -> list:
     # force login here before opening other driver
     search_url = vbulletin_session.base_url + 'search.php?do=process'
-    os.environ['MOZ_HEADLESS'] = '1'
-    driver = webdriver.Firefox()
+    # os.environ['MOZ_HEADLESS'] = '1'
+    # driver = webdriver.Firefox()
     search_result = None
     try:
-        import_cookies_from_session(driver)
+        # import_cookies_from_session(driver)
         driver.get(search_url)
-        click_cookies_button(driver)
-        fill_search_form(driver)
-        element_present = EC.presence_of_element_located((By.ID, 'threadslist'))
-        WebDriverWait(driver, timeout=1000).until(element_present)
-        search_result = loop_search_results(driver,
-                                            start_url=search_url,
-                                            search_query=search_query,
-                                            strict_search=strict_search)
+        # click_cookies_button(driver)
+        if fill_search_form_all_parameters(driver,
+                                           keyword=search_query, search_in_title=search_in_title,
+                                           author=author, threads_started_by_user=threads_started_by_user,
+                                           reply_number=reply_number, max_messages=max_messages,
+                                           time_limit=time_limit, older_than=older_than,
+                                           order_type=order_type, ascending=ascending,
+                                           show_as_messages=show_as_messages,
+                                           subforum=subforum):
+            search_result = loop_search_results(driver,
+                                                start_url=search_url,
+                                                search_query=search_query,
+                                                strict_search=strict_search)
     except TimeoutException as ex:
         print('Error accessing {}: Timeout: {}'.format(search_url, str(ex)))
     except Exception as ex:
@@ -382,70 +230,38 @@ def search_selenium(search_query, strict_search):
     return search_result
 
 
-def start_searching():
-    return search_selenium()
-
-
-def search_with_posters_metadata():
+def search_with_posters_metadata(driver=None,
+                                 search_query: str = '',
+                                 strict_search: bool = False,
+                                 search_in_title: bool = False,
+                                 author: str = '', threads_started_by_user: bool = False,
+                                 reply_number: str = '', max_messages: bool = False,
+                                 time_limit: str = '365', older_than: bool = True,
+                                 order_type: str = 'lastpost', ascending: bool = True,
+                                 show_as_messages: bool = True,
+                                 subforum: str = '23'):
     """
-        search parameters
-
-        keywords
-        search in message / search in title
-
-        user name
-        user messages / user threads
-
-        message number
-        at least / max
-
-        message date
-            "searchdate"
-                "0"  = Cualquier fecha (opción por defecto)
-                "lastvisit" = Tu última visita, "1" = Ayer, "7" = Hace una semana, "14" = Hace 2 Semanas,
-                "30" = Hace un mes, "90" = Hace 3 Meses, "180" = Hace 6 Meses, "365" = Hace un año
-        older / newer
-
-        order by
-            "sortby":
-                "rank" = Relevancia, "title" = Título, "replycount" = Número de Respuestas,
-                "views" = Número de Visitas, "threadstart" = Fecha Enviado,
-                "lastpost" = Fecha de Último Mensaje (opción por defecto), "postusername" = Usuario
-        ascending/ descending
-
-        subforum
-        recursive
-
-        show as threads / show as messages
-
-        I will use the selenium driver
     """
-    driver = vbulletin_session.driver
+    if not driver:
+        driver = vbulletin_session.driver
     search_url = vbulletin_session.base_url + 'search.php?do=process'
-    search_query = 'viviendas'
-    thread_list = fill_search_form(driver,
-                     keyword=search_query, search_in_title=True,
-                     author='', threads_started_by_user=False,
-                     reply_number='1500', max_messages=False,
-                     time_limit='0', older_than=False,
-                     order_type='lastpost', ascending=True,
-                     show_as_messages=False,
-                     subforum='23')
-    if thread_list:
-        search_result = loop_search_results(driver,
-                                            start_url=search_url,
-                                            search_query=search_query,
-                                            strict_search=False)
+    search_result = search_selenium(driver=driver,
+                                    strict_search=strict_search,
+                                    search_query=search_query, search_in_title=search_in_title,
+                                    author=author, threads_started_by_user=threads_started_by_user,
+                                    reply_number=reply_number, max_messages=max_messages,
+                                    time_limit=time_limit, older_than=older_than,
+                                    order_type=order_type, ascending=ascending,
+                                    show_as_messages=show_as_messages,
+                                    subforum=subforum)
+    for res in search_result['links']:
+        peek_thread_metadata(res)
+        from vBulletinThreadUtils.vBulletinThreadPostersInfo import get_posters_from_thread
+        posters = get_posters_from_thread(res['id'])
         time.sleep(10)
-        for res in search_result['links']:
-            peek_thread_metadata(res)
-            from vBulletinThreadUtils.vBulletinThreadPostersInfo import get_posters_from_thread
-            posters = get_posters_from_thread(res['id'])
-            time.sleep(10)
-            res['posters'] = posters
-        with open('./output/posters_file', 'w') as posters_file:
-            json.dump(search_result, posters_file)
-    driver.close()
+        res['posters'] = posters
+    with open('./output/posters_file', 'w') as posters_file:
+        json.dump(search_result, posters_file)
     pass
 
 
