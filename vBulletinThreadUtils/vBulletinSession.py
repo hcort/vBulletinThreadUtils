@@ -1,7 +1,9 @@
 import configparser
 import os
 
-from vBulletinThreadUtils.vBulletinLoginSelenium import VBulletinLogin, create_session_object, create_driver_and_login
+from vBulletinThreadUtils.vBulletinLoginSelenium import (create_session_object,
+                                                         create_driver_and_login,
+                                                         hijack_cookies)
 
 
 class VBulletinSession:
@@ -25,6 +27,11 @@ class VBulletinSession:
         self.__password = self.__config['VBULLETIN'].get('password', '')
         self.__base_url = self.__config['VBULLETIN'].get('base_url', '')
         self.__driver = None
+
+    def __del__(self):
+        if self.__driver:
+            self.__driver.close()
+
 
     @property
     def session(self):
@@ -87,7 +94,13 @@ class VBulletinSession:
             'vb_login_username': self.__user_name,
             'vb_login_password': self.__password}
         # .../foro/misc.php?do=page&template=ident
-        self.__session = VBulletinLogin(self.__base_url + 'misc.php?do=page&template=ident', login_data)
+        # self.__session = VBulletinLogin(self.__base_url + 'misc.php?do=page&template=ident', login_data)
+        self.__driver = create_driver_and_login(login_url=self.__base_url + 'misc.php?do=page&template=ident',
+                                                login_data=login_data)
+        self.__session = hijack_cookies(self.__driver)
+        cookie_bbimloggedin = self.__session.cookies.get('bbimloggedin', default='no')
+        if cookie_bbimloggedin == 'no':
+            print('cookie bbimloggedin no encontrada')
 
     @property
     def driver(self):
