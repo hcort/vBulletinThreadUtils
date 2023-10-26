@@ -52,13 +52,16 @@ def get_logged_in_cookie(driver):
 
 
 def click_cookies_button(driver):
-    timeout = 100
-    element_present = EC.presence_of_element_located((By.CLASS_NAME, 'sd-cmp-3cRQ2'))
-    WebDriverWait(driver, timeout).until(element_present)
-    element = driver.find_element(By.CLASS_NAME, 'sd-cmp-3cRQ2')
-    element.click()
-    element_present = EC.presence_of_element_located((By.CLASS_NAME, 'sd-cmp-3cRQ2'))
-    WebDriverWait(driver, timeout).until_not(element_present)
+    try:
+        timeout = 20
+        element_present = EC.presence_of_element_located((By.CLASS_NAME, 'sd-cmp-3cRQ2'))
+        WebDriverWait(driver, timeout).until(element_present)
+        element = driver.find_element(By.CLASS_NAME, 'sd-cmp-3cRQ2')
+        element.click()
+        element_present = EC.presence_of_element_located((By.CLASS_NAME, 'sd-cmp-3cRQ2'))
+        WebDriverWait(driver, timeout).until_not(element_present)
+    except TimeoutError:
+        pass
 
 
 def VBulletinLoginSelenium(login_url='', login_data=None):
