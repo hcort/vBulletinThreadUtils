@@ -10,7 +10,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-regex_message_id = re.compile("#post([0-9]+)")
+regex_message_id = re.compile(r'#post([0-9]+)')
 
 
 def delete_message(driver, message):
@@ -37,7 +37,7 @@ def delete_message(driver, message):
         WebDriverWait(driver, timeout).until(element_present)
         element = driver.find_element(By.ID, 'rb_del_soft')
         element.click()
-        element = driver.find_element(By.ID, "quickedit_dodelete")
+        element = driver.find_element(By.ID, 'quickedit_dodelete')
         element.click()
         # element_present = EC.presence_of_element_located((By.ID, f'post_message_{message_id}'))
         # WebDriverWait(driver, timeout).until_not(element_present)

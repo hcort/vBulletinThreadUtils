@@ -1,4 +1,8 @@
-# beautiful soup for HTML parsing
+"""
+    Uses the search form in a vBulletin forum filling all the fields
+
+    search_selenium does the search and returns a list with all the search results
+"""
 import json
 import re
 import time
@@ -12,15 +16,16 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 from vBulletinThreadUtils.vBulletinSession import vbulletin_session
 from vBulletinThreadUtils.vBulletinThreadParserGen import peek_thread_metadata, normalize_date_string_vbulletin_format
+from vBulletinThreadUtils.vBulletinThreadPostersInfo import get_posters_from_thread
 
 
 def find_next(soup):
-    next_link = soup.find("a", {"rel": "next"})
+    next_link = soup.find('a', {'rel': 'next'})
     return vbulletin_session.base_url + next_link.get('href', '') if next_link else ''
 
 
-re_author_from_link = re.compile("member.php\?u=(\d+)")
-re_thread_id_from_link = re.compile("thread_title_(\d+)")
+re_author_from_link = re.compile(r'member.php\?u=(\d+)')
+re_thread_id_from_link = re.compile(r'thread_title_(\d+)')
 
 
 def get_links(soup, search_query='', strict_search=False):
@@ -55,7 +60,7 @@ def get_links(soup, search_query='', strict_search=False):
 
 
 def get_search_id(driver):
-    regex_thread_id = re.compile("searchid=(\d+)")
+    regex_thread_id = re.compile(r'searchid=(\d+)')
     search_id = regex_thread_id.search(driver.current_url)
     return search_id.group(1) if search_id else ''
 
@@ -67,18 +72,16 @@ def loop_search_results(driver, start_url, search_query, strict_search):
     search_result = {'links': []}
     while current_url:
         if first_search:
-            # source = driver.execute_script("return document.body.innerHTML;")
             source = driver.page_source
-            search_soup = BeautifulSoup(source, features="html.parser")
+            search_soup = BeautifulSoup(source, features='html.parser')
             search_result['search_id'] = get_search_id(driver)
             first_search = False
         else:
             driver.get(current_url)
             element_present = EC.presence_of_element_located((By.ID, 'threadslist'))
             WebDriverWait(driver, timeout).until(element_present)
-            # source = driver.execute_script("return document.body.innerHTML;")
             source = driver.page_source
-            search_soup = BeautifulSoup(source, features="html.parser")
+            search_soup = BeautifulSoup(source, features='html.parser')
         if search_soup:
             search_result['links'] += get_links(soup=search_soup,
                                                 search_query=search_query, strict_search=strict_search)
@@ -121,23 +124,23 @@ def fill_search_form_all_parameters(driver,
         search_query_input.send_keys(keyword)
         if search_in_title:
             search_in_title_select = Select(driver.find_elements(By.NAME, 'titleonly')[1])
-            search_in_title_select.select_by_value("1")
+            search_in_title_select.select_by_value('1')
 
         # author
         if author:
-            thread_author_field = driver.find_element(By.ID, "userfield_txt")
+            thread_author_field = driver.find_element(By.ID, 'userfield_txt')
             thread_author_field.send_keys(author)
         if threads_started_by_user:
             show_as_user_messages_select = Select(driver.find_element(By.NAME, 'starteronly'))
-            show_as_user_messages_select.select_by_value("1")
+            show_as_user_messages_select.select_by_value('1')
 
         # number of replies
         if reply_number:
-            reply_number_field = driver.find_element(By.NAME, "replylimit")
+            reply_number_field = driver.find_element(By.NAME, 'replylimit')
             reply_number_field.send_keys(reply_number)
         if max_messages:
             reply_number_select = Select(driver.find_element(By.NAME, 'replyless'))
-            reply_number_select.select_by_value("1")
+            reply_number_select.select_by_value('1')
 
         # date
         search_by_date_select = Select(driver.find_element(By.NAME, 'searchdate'))
@@ -157,15 +160,15 @@ def fill_search_form_all_parameters(driver,
         if show_as_messages:
             # show as threads is the default value of this radio
             show_messages_radio = driver.find_element(By.ID, 'rb_showposts_1')
-            driver.execute_script("return arguments[0].scrollIntoView();", show_messages_radio)
+            driver.execute_script('return arguments[0].scrollIntoView();', show_messages_radio)
             show_messages_radio.click()
 
         # select subforum
-        subforum_select = Select(driver.find_element(By.NAME, "forumchoice[]"))
+        subforum_select = Select(driver.find_element(By.NAME, 'forumchoice[]'))
         subforum_select.select_by_value(subforum)
 
         search_button = driver.find_element(By.NAME, 'dosearch')
-        driver.execute_script("return arguments[0].scrollIntoView();", search_button)
+        driver.execute_script('return arguments[0].scrollIntoView();', search_button)
         search_button.click()
 
         timeout = 20
@@ -222,9 +225,9 @@ def search_selenium(driver=None,
                                                 search_query=search_query,
                                                 strict_search=strict_search)
     except TimeoutException as ex:
-        print('Error accessing {}: Timeout: {}'.format(search_url, str(ex)))
+        print(f'Error accessing {search_url}: Timeout: {str(ex)}')
     except Exception as ex:
-        print('Error accessing {}: Timeout: {}'.format(search_url, str(ex)))
+        print(f'Error accessing {search_url}: Timeout: {str(ex)}')
     finally:
         driver.close()
     return search_result
@@ -241,10 +244,10 @@ def search_with_posters_metadata(driver=None,
                                  show_as_messages: bool = True,
                                  subforum: str = '23'):
     """
+        see fill_search_form_all_parameters for the description of parameters
     """
     if not driver:
         driver = vbulletin_session.driver
-    search_url = vbulletin_session.base_url + 'search.php?do=process'
     search_result = search_selenium(driver=driver,
                                     strict_search=strict_search,
                                     search_query=search_query, search_in_title=search_in_title,
@@ -256,11 +259,10 @@ def search_with_posters_metadata(driver=None,
                                     subforum=subforum)
     for res in search_result['links']:
         peek_thread_metadata(res)
-        from vBulletinThreadUtils.vBulletinThreadPostersInfo import get_posters_from_thread
         posters = get_posters_from_thread(res['id'])
         time.sleep(10)
         res['posters'] = posters
-    with open('./output/posters_file', 'w') as posters_file:
+    with open('./output/posters_file', 'w', encoding='utf-8') as posters_file:
         json.dump(search_result, posters_file)
     pass
 
@@ -269,5 +271,5 @@ def main():
     search_with_posters_metadata()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

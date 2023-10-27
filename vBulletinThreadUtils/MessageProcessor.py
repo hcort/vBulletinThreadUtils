@@ -1,3 +1,12 @@
+"""
+    A MessageProcessor is an object that encapsulates a function to
+    manipulate post messages
+
+    All derived classes must implement the process_message function
+
+    This function takes the HTML object (from BeautifulSoup) of the message
+
+"""
 from bs4 import Tag
 
 from vBulletinThreadUtils.html2bbcode import parse_children_in_node
@@ -17,13 +26,17 @@ class MessageProcessor(object):
     """
 
     def process_message(self, thread_info: dict, post_id: str, message: Tag):
-        raise NotImplementedError("Should have implemented this")
+        raise NotImplementedError('Should have implemented this')
 
 
 class MessageHTMLToText(MessageProcessor):
+    """
+        Converts the BeautifulSoup Tag object into a HTML string
+        with all the formatting tags
+    """
 
     def process_message(self, thread_info: dict, post_id: str, message: Tag):
-        return message.prettify(formatter="minimal")
+        return message.prettify(formatter='minimal')
 
 
 class MessageHTMLToTextAddingBorderToBlockquote(MessageProcessor):
@@ -36,10 +49,14 @@ class MessageHTMLToTextAddingBorderToBlockquote(MessageProcessor):
         blockquotes = message.find_all('blockquote')
         for blockquote in blockquotes:
             blockquote['style'] = 'border-style: double;'
-        return message.prettify(formatter="minimal")
+        return message.prettify(formatter='minimal')
 
 
 class MessageHTMLToPlainText(MessageProcessor):
+    """
+        Removes all the formatting tags from the HTML object and
+        returns the text of the message
+    """
 
     def process_message(self, thread_info: dict, post_id: str, message: Tag):
         """
@@ -63,21 +80,23 @@ class MessageHTMLToPlainText(MessageProcessor):
 
 
 class MessageHTMLToBBCode(MessageProcessor):
+    """
+        Converts HTML formatting into the original BBCode
+    """
 
     def process_message(self, thread_info: dict, post_id: str, message: Tag):
         return parse_children_in_node(message)
 
 
-def write_message_to_thread_file_only_html_tag(thread_file, thread_info, message_id, message_as_tag):
+def write_message_to_thread_file_only_html_tag(thread_file, thread_info, message_id, message_as_tag) -> None:
     """
         This is used by MessageHTMLToHTMLFile to write HTML files
 
-
-    :param thread_file:
-    :param thread_id:
-    :param message_id:
-    :param message_as_tag:
-    :return:
+    :param thread_file: the output file
+    :param thread_info: the dictionary with all the parsed data
+    :param message_id: the current message id
+    :param message_as_tag: the HTML object of the current message
+    :return: None
     """
     # don't want to change the thread metadata
     message = dict(thread_info['parsed_messages'][message_id])

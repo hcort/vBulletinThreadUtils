@@ -37,6 +37,7 @@ import pickle
 
 from tqdm import tqdm
 
+from vBulletinThreadUtils import vBulletinSearch
 from vBulletinThreadUtils.MessageFilter import MessageFilterByAuthor
 from vBulletinThreadUtils.MessageProcessor import MessageHTMLToBBCode, MessageHTMLToText, MessageHTMLToPlainText, \
     MessageHTMLToHTMLFile
@@ -47,6 +48,9 @@ from vBulletinThreadUtils.vBulletinThreadParserGen import parse_thread, thread_i
 
 
 class ProgressVisorTQDM(ProgressVisor):
+    """
+        Uses the TQDM package as a progress visor
+    """
     def __init__(self, message: str):
         super().__init__(message)
         self.__tqdm_progress = tqdm(position=0, leave=True, desc=f'Parsing {message}')
@@ -133,7 +137,7 @@ def thread_parsing_with_filter_by_post_author():
     save_parse_result_as_file(thread_info=thread_info, save_to_index=False)
 
 
-def thread_parsing_convert_messages_to_BBCode():
+def thread_parsing_convert_messages_to_BBCode():  # pylint: disable=invalid-name
     """
         This test demonstrates the basic use of a MessageProcessor object
 
@@ -149,16 +153,17 @@ def thread_parsing_convert_messages_to_BBCode():
     message_processor = MessageHTMLToBBCode()
     parse_thread(thread_info=thread_info, filter_obj=None, post_processor=message_processor)
     for idx, post_id in enumerate(thread_info['parsed_messages']):
-        print('Post #{} - {} - {}'.format(thread_info['parsed_messages'][post_id]['index'],
-                                          thread_info['parsed_messages'][post_id]['author']['username'],
-                                          thread_info['parsed_messages'][post_id]['date']))
+        print(
+            f'Post #{thread_info["parsed_messages"][post_id]["index"]} - '
+            f'{thread_info["parsed_messages"][post_id]["author"]["username"]} - '
+            f'{thread_info["parsed_messages"][post_id]["date"]}')
         print(thread_info['parsed_messages'][post_id]['message'])
         print('-----------------------------------------------------')
         if idx == 10:
             break
 
 
-def thread_search_and_parse_convert_messages_to_PlainText():
+def thread_search_and_parse_convert_messages_to_plain_text():
     """
         This test demonstrates the basic use of a MessageProcessor object
 
@@ -175,8 +180,11 @@ def thread_search_and_parse_convert_messages_to_PlainText():
     vbulletin_session.minimum_posts = '1000'
     vbulletin_session.output_dir = './output/oraculo/'
     if not os.path.exists(os.path.join(vbulletin_session.output_dir, 'search.pickle')):
-        from vBulletinThreadUtils.vBulletinSearch import start_searching
-        link_list = start_searching()
+        link_list = vBulletinSearch.search_selenium(
+            driver=vbulletin_session.driver,
+            search_query='viviendas',
+            reply_number='1000',
+            subforum='23')
         with open(os.path.join(vbulletin_session.output_dir, 'search.pickle'), 'wb') as file:
             pickle.dump(link_list, file)
     else:
@@ -193,7 +201,7 @@ def thread_search_and_parse_convert_messages_to_PlainText():
                 json.dump(thread_info, json_file)
 
 
-def thread_parsing_convert_messages_to_PlainText():
+def thread_parsing_convert_messages_to_plain_text():
     thread_info = thread_id_to_thread_link_dict('8865750')
     message_processor = MessageHTMLToPlainText()
     filter_obj = MessageFilterByAuthor('...')
@@ -213,7 +221,6 @@ def thread_parsing_save_to_json_file():
     thread_list = [thread_id_to_thread_link_dict(thread_id) for thread_id in thread_ids]
     if not vbulletin_session.output_dir:
         vbulletin_session.output_dir = './output/'
-    filter_obj = MessageFilterByAuthor('@OP')
     for item in thread_list:
         progress_bar = ProgressVisorTQDM(item['url'])
         parse_thread(thread_info=item, filter_obj=None, post_processor=MessageHTMLToText(), progress=progress_bar)
@@ -236,5 +243,5 @@ def main():
     thread_parsing_save_to_json_file()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

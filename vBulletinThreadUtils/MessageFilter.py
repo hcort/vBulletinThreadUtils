@@ -25,10 +25,13 @@ class MessageFilter:
         """
         :return: True if the message is valid according to filter
         """
-        raise NotImplementedError("Should have implemented this")
+        raise NotImplementedError('Should have implemented this!')
 
 
 class MessageFilterByAuthor(MessageFilter):
+    """
+        Filters messages by username
+    """
 
     def __init__(self, author):
         self.__author = author

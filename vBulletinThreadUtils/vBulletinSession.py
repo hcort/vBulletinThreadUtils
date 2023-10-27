@@ -1,3 +1,8 @@
+"""
+    Encapsulates all the data needed to parse threads in a vBulletin forum
+
+    It also serves as an access point for the selenium webdriver
+"""
 import configparser
 import os
 
@@ -7,6 +12,10 @@ from vBulletinThreadUtils.vBulletinLoginSelenium import (create_session_object,
 
 
 class VBulletinSession:
+    """
+        The class that encapsulates the data
+        It reads from a config.ini file
+    """
     def __init__(self):
         self.__session = None
         # TODO https://docs.python.org/3/library/configparser.html
@@ -21,7 +30,7 @@ class VBulletinSession:
         try:
             self.__config.read(config_path, encoding='utf-8')
         except IOError as err:
-            print(f'Error opening config file: {config_path}')
+            print(f'Error opening config file: {config_path} - {err}')
         self.__output_dir = self.__config['VBULLETIN']['output_dir']
         self.__user_name = self.__config['VBULLETIN'].get('logname', '')
         self.__password = self.__config['VBULLETIN'].get('password', '')
@@ -31,7 +40,6 @@ class VBulletinSession:
     def __del__(self):
         if self.__driver:
             self.__driver.close()
-
 
     @property
     def session(self):

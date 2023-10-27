@@ -1,4 +1,13 @@
+"""
+    Interface to show the progress of a long job
+"""
+
+
 class ProgressVisor:
+    """
+        Basic progress visor.
+        It only stores progress info, but does not display anything
+    """
     def __init__(self, message: str = 'Progress:'):
         self.message = message
         self.total_iterations = 0

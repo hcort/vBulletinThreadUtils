@@ -1,41 +1,40 @@
-import re
-
-from bs4 import NavigableString, Tag
-
-regex_mention_user = re.compile("member.php\?u=([0-9]+)")
-regex_quote_user = re.compile("showthread.php\?p=[0-9]+#post([0-9]+)")
-regex_youtube_script = re.compile("verVideo\(\\'([\w\-]+)\\'")
-regex_instagram_permalink = re.compile("/p/([\w]+)/")
-
 """
     TODO
-    
+
     pending tags
-    
+
     [VOCAROO][/VOCAROO]
     [TIKTOK][/TIKTOK]
     [FB][/FB]
     [CODE][/CODE]
-    
+
     [INDENT][/INDENT]
 
-    [LEFT]alineación izquierda[/LEFT]    
-    [CENTER]alineación centro[/CENTER]    
-    [RIGHT]alineación derecha[/RIGHT]  
-    
-    [COLOR=Red]texto con color[/COLOR]    
+    [LEFT]alineación izquierda[/LEFT]
+    [CENTER]alineación centro[/CENTER]
+    [RIGHT]alineación derecha[/RIGHT]
+
+    [COLOR=Red]texto con color[/COLOR]
     [COLOR=Red][B]color y negrita[/B][/COLOR]
 
     <div align="left">alineación izquierda</div>
     <div align="center">alineación centro</div>
     <div align="right">alineación derecha</div>
-    
+
     <font color="Red">texto con color</font>
     <font color="Red"><b>color y negrita</b></font>
 """
+import re
+
+from bs4 import NavigableString, Tag
+
+regex_mention_user = re.compile(r'member.php\?u=([0-9]+)')
+regex_quote_user = re.compile(r'showthread.php\?p=[0-9]+#post([0-9]+)')
+regex_youtube_script = re.compile(r"verVideo\(\\'([\w\-]+)\\'")
+regex_instagram_permalink = re.compile(r'/p/([\w]+)/')
 
 
-def parseHTMLnode(child):
+def parseHTMLnode(child):  # pylint: disable=invalid-name
     # print(child)
     if child.name == 'br':
         return '\n'
@@ -84,7 +83,7 @@ def parseHTMLnode(child):
 def parse_children_in_node(child):
     child_text = ''
     for sub_child in child.children:
-        if type(sub_child) is Tag:
+        if isinstance(sub_child, Tag):
             child_text += parseHTMLnode(sub_child)
         else:
             child_text += sub_child
@@ -95,7 +94,7 @@ def parse_list(child):
     if child.name == 'ul' or child.name == 'ol':
         ordered = '=1' if child.name[0] == 'o' else ''
         inner_text = parse_children_in_node(child)
-        return '[LIST{}]{}[/LIST]'.format(ordered, inner_text)
+        return f'[LIST{ordered}]{inner_text}[/LIST]'
     return ''
 
 
@@ -113,10 +112,10 @@ def parse_formatted_text(child):
     if child.name == 'b' or child.name == 'strong':
         opening_tag = 'B'
     if child.name == 'font':
-        opening_tag = 'SIZE={}'.format(child.attrs.get('size', ''))
+        opening_tag = f'SIZE={child.attrs.get("size", "")}'
     if opening_tag:
         inner_text = parse_children_in_node(child)
-        return '[{}]{}[/{}]'.format(opening_tag, inner_text, opening_tag)
+        return f'[{opening_tag}]{inner_text}[/{opening_tag}]'
     return ''
 
 
@@ -124,13 +123,13 @@ def parse_script(child):
     if child.name == 'script':
         m = regex_youtube_script.search(child.text)
         if m:
-            return '[YOUTUBE]{}[/YOUTUBE]'.format(m.group(1))
+            return f'[YOUTUBE]{m.group(1)}[/YOUTUBE]'
     else:
         script = child.select_one('script')
         if script:
             m = regex_youtube_script.search(script.text)
             if m:
-                return '[YOUTUBE]{}[/YOUTUBE]'.format(m.group(1))
+                return f'[YOUTUBE]{m.group(1)}[/YOUTUBE]'
             pass
     return ''
 
@@ -141,17 +140,17 @@ def parse_instagram_embed(child):
         if ig_link:
             m = regex_instagram_permalink.search(ig_link)
             if m:
-                return '[IG]{}[/IG]'.format(m.group(1))
+                return f'[IG]{m.group(1)}[/IG]'
     return ''
 
 
 def parse_image(child):
     if child.name == 'img':
         if 'imgpost' in child.attrs.get('class', []):
-            return '[IMG]{}[/IMG]'.format(child.attrs.get('src', ''))
+            return f'[IMG]{child.attrs.get("src", "")}[/IMG]'
         elif 'inlineimg' in child.attrs.get('class', []):
             # emoticon
-            return ':{}:'.format(child.attrs.get('title', ''))
+            return f':{child.attrs.get("title", "")}:'
     return ''
 
 
@@ -170,31 +169,31 @@ def parse_quotes(child):
             quote_div.extract()
             text_quoted = child.select_one('div > table > tr > td.alt2 > div')
         inner_text = parse_children_in_node(text_quoted)
-        return '[QUOTE={};{}]{}[/QUOTE]'.format(username, post_id, inner_text)
+        return f'[QUOTE={username};{post_id}]{inner_text}[/QUOTE]'
     return ''
 
 
 def parse_link(child):
     if child.name == 'a':
-        return '[URL="{}"]{}[/URL]'.format(child.get('href', ''), child.text)
+        return f'[URL="{child.get("href", "")}"]{child.text}[/URL]'
     return ''
 
 
 def parse_mention(child):
-    if child.name == 'b' and ((type(child.previous) is NavigableString) and (child.previous.find('@') != -1)):
-        if child.next and child.next.name == 'a':
-            m = regex_mention_user.search(child.next.attrs.get('href', ''))
-            if m:
-                # mention = @[URL="https://xxx.com/foro/member.php?u=xxx"]xxx[/URL]
-                return '[B][URL="{}"]{}[/URL][/B]'.format(child.next.get('href', ''), child.text)
+    if child.name == 'b' and (isinstance(child.previous, NavigableString) and (
+            child.previous.find('@') != -1)) and child.next and child.next.name == 'a':
+        m = regex_mention_user.search(child.next.attrs.get('href', ''))
+        if m:
+            # mention = @[URL="https://xxx.com/foro/member.php?u=xxx"]xxx[/URL]
+            return f'[B][URL="{child.next.get("href", "")}"]{child.text}[/URL][/B]'
     return ''
 
 
 def parse_tweet(child):
     twit_messages = ''
     if child.name == 'blockquote' and ('twitter-tweet' in child.attrs.get('class', [])):
-        twit_messages += '[TWEET]{}[/TWEET]\n'.format(child.text)
+        twit_messages += f'[TWEET]{child.text}[/TWEET]\n'
     tweets = child.select('blockquote.twitter-tweet')
     for twit in tweets:
-        twit_messages += '[TWEET]{}[/TWEET]\n'.format(twit.text)
+        twit_messages += f'[TWEET]{twit.text}[/TWEET]\n'
     return twit_messages

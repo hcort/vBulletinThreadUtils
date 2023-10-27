@@ -1,3 +1,13 @@
+"""
+    The main parser
+
+    It works with a dictionary that represents a thread.
+    See parse_thread for a detailed description.
+
+    peek_thread_metadata fills the basic data of the thread without parsing any messages
+
+    parse_thread parses all the thread messages
+"""
 import datetime
 import re
 
@@ -56,7 +66,7 @@ def peek_thread_metadata(thread_info: dict = None) -> None:
 
     thread_info['parsed_messages'] = {}
     thread_info['title'] = soup.select_one('title').text
-    __update_thread_timestamps(thread_info=thread_info, soup=soup)
+    _update_thread_timestamps(thread_info=thread_info, soup=soup)
 
     op_info = soup.select_one('div[id^="postmenu_"]')
     if op_info:
@@ -148,19 +158,19 @@ def parse_thread(thread_info: dict, filter_obj: MessageFilter = None, post_proce
         thread_info['parsed_messages'] = {}
 
     if progress and thread_info.get('last_page', None):
-        progress.update(n=thread_info["last_page"])
+        progress.update(n=thread_info['last_page'])
     soup = None
     while current_url:
         soup = get_soup_requests(current_url)
         if not soup:
             break
-        __update_progress_bar(progress, soup)
-        __search_and_parse_messages(thread_info, soup, filter_obj, current_url, post_processor)
-        thread_info["last_page"] = __get_page_number_from_url(current_url)
-        next_url = __get_next_url(soup)
+        _update_progress_bar(progress, soup)
+        _search_and_parse_messages(thread_info, soup, filter_obj, current_url, post_processor)
+        thread_info['last_page'] = _get_page_number_from_url(current_url)
+        next_url = _get_next_url(soup)
         # FIXME sometimes current_url is a "ghost page" that contains the same messages as the previous one
         current_url = next_url if next_url != current_url else None
-    __update_thread_timestamps(thread_info, soup)
+    _update_thread_timestamps(thread_info, soup)
 
 
 regex_page_number = re.compile(r'page=([0-9]+)')
@@ -173,7 +183,7 @@ regex_message_table = re.compile(r'td_post_[0-9]+')
 regex_message_id = re.compile(r'#post([0-9]+)')
 
 
-def __update_thread_timestamps(thread_info: dict, soup: BeautifulSoup) -> None:
+def _update_thread_timestamps(thread_info: dict, soup: BeautifulSoup) -> None:
     """
         Extracts metadata about the thread:
             - creation date
@@ -209,7 +219,7 @@ def __update_thread_timestamps(thread_info: dict, soup: BeautifulSoup) -> None:
                      delta_hour).strftime('%Y-%m-%d - %H:%M')
 
 
-def __get_post_title(msg: Tag) -> str:
+def _get_post_title(msg: Tag) -> str:
     """
         The title of the post is optional
 
@@ -220,7 +230,7 @@ def __get_post_title(msg: Tag) -> str:
     return title_node.text if title_node else ''
 
 
-def __remove_other_tags_from_msg(msg: Tag) -> None:
+def _remove_other_tags_from_msg(msg: Tag) -> None:
     """
         Given the HTML structure of a post we have to remove some irrelevant content
         that appears before the start of the message
@@ -236,7 +246,7 @@ def __remove_other_tags_from_msg(msg: Tag) -> None:
     msg.contents = msg.contents[decomposed_tags + 1:]
 
 
-def __get_post_author_info(user_info: Tag, post_user_is_op: bool = False) -> dict:
+def _get_post_author_info(user_info: Tag, post_user_is_op: bool = False) -> dict:
     user_info_len = len(user_info.contents)
     post_user_name = user_info.contents[3].text.strip() if user_info_len > 3 else ''
     user_id = ''
@@ -255,7 +265,7 @@ def __get_post_author_info(user_info: Tag, post_user_is_op: bool = False) -> dic
     }
 
 
-def __search_and_parse_messages(thread_info, soup, filter_obj, current_url, post_processor):
+def _search_and_parse_messages(thread_info, soup, filter_obj, current_url, post_processor):
     """
         A message is composed of:
             - Username
@@ -287,12 +297,12 @@ def __search_and_parse_messages(thread_info, soup, filter_obj, current_url, post
             current_post = {
                 'link': idx.get('href', ''),
                 'index': idx.text,
-                'title': __get_post_title(msg),
-                'date': __fix_post_date(post_date.text.strip())
+                'title': _get_post_title(msg),
+                'date': _fix_post_date(post_date.text.strip())
             }
-            __remove_other_tags_from_msg(msg)
+            _remove_other_tags_from_msg(msg)
             post_user_is_op = 'alt1-author' in msg.get('class', [])
-            current_post['author'] = __get_post_author_info(user_info, post_user_is_op)
+            current_post['author'] = _get_post_author_info(user_info, post_user_is_op)
 
             # I want to have the message metadata in the dictionary before calling the post-processor
             post_id = get_string_from_regex(regex_message_id, current_post['link'])
@@ -307,17 +317,17 @@ def __search_and_parse_messages(thread_info, soup, filter_obj, current_url, post
                 thread_info['last_message'] = current_post.get('index', 0)
             else:
                 thread_info['parsed_messages'].pop(post_id)
-            __update_first_post_id_info(thread_info, post_id, current_post)
+            _update_first_post_id_info(thread_info, post_id, current_post)
     except Exception as err:
         print(f'Error in thread {current_url} - {err}')
 
 
-def __get_next_url(soup: BeautifulSoup) -> str:
+def _get_next_url(soup: BeautifulSoup) -> str:
     next_link = soup.select_one('a[rel="next"]')
     return f"{vbulletin_session.base_url}{next_link.get('href', '')}" if next_link else ''
 
 
-def __fix_post_date(date_string: str) -> str:
+def _fix_post_date(date_string: str) -> str:
     """
         Handles some formatting of dates in Spanish.
         Most recent post may have a date like "Hoy, 13:37" or "Ayer, 23:50"
@@ -336,30 +346,30 @@ def __fix_post_date(date_string: str) -> str:
     #     return normalize_date_string_vbulletin_format(date_string)
 
 
-def __get_page_number_from_url(url):
+def _get_page_number_from_url(url):
     return get_string_from_regex(regex_page_number, url)
 
 
-def __get_last_page(soup):
+def _get_last_page(soup):
     last_or_next_link = soup.select_one('td:nth-last-child(2).alt1 > a')
     if not last_or_next_link:
         return ''
     if last_or_next_link.text == '>':
         last_or_next_link = soup.select_one('td:nth-last-child(3).alt1 > a')
-    return __get_page_number_from_url(last_or_next_link.attrs.get('href', ''))
+    return _get_page_number_from_url(last_or_next_link.attrs.get('href', ''))
 
 
-def __update_progress_bar(progress, soup):
+def _update_progress_bar(progress, soup):
     if not progress:
         return
     if not progress.total:
-        last_page = __get_last_page(soup)
+        last_page = _get_last_page(soup)
         if last_page:
             progress.total = int(last_page)
     progress.update()
 
 
-def __update_first_post_id_info(thread_info, post_id: str = None, post_dict: dict = None):
+def _update_first_post_id_info(thread_info, post_id: str = None, post_dict: dict = None):
     if not thread_info.get('first_post_id', None):
         if not thread_info.get('parsed_messages', None):
             return

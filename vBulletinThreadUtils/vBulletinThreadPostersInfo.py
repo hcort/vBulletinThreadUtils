@@ -4,9 +4,7 @@
 
     base_url/misc.php?do=whoposted&t=thread_id
 
-
-    html body table.tborder tbody tr
-
+    The posters are in a table with odd and even rows
 """
 from selenium.webdriver.common.by import By
 

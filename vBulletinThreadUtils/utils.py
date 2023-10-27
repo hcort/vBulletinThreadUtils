@@ -11,14 +11,17 @@ from bs4 import BeautifulSoup
 from vBulletinThreadUtils.vBulletinSession import vbulletin_session
 
 
-def get_soup_requests(url: str = None) -> BeautifulSoup | None:
+def get_soup_requests(requests_session: requests.Session = None, url: str = None) -> BeautifulSoup | None:
     if not url:
         return None
-    current_page = vbulletin_session.session.get(url, timeout=30)
+    if not requests_session:
+        current_page = vbulletin_session.session.get(url, timeout=30)
+    else:
+        current_page = requests_session.get(url, timeout=30)
     if current_page.status_code != requests.codes.ok:
         print(f'Error getting {url} - response code: {current_page.status_code}')
         return None
-    return BeautifulSoup(current_page.text, features="html.parser")
+    return BeautifulSoup(current_page.text, features='html.parser')
 
 
 def get_string_from_regex(pattern: Pattern, text: str) -> str:
@@ -30,6 +33,18 @@ def get_string_from_regex(pattern: Pattern, text: str) -> str:
     """
     m = pattern.search(text)
     return m.group(1) if m else ''
+
+
+def get_attribute_from_soup_find(soup,
+                                 what_to_find: str, find_attrs=None,
+                                 attribute: str = '',
+                                 default_value: str = None):
+    if find_attrs is None:
+        find_attrs = {}
+    soup_element = soup.find(what_to_find, find_attrs)
+    if soup_element:
+        return soup_element.get(attribute, default_value)
+    return default_value
 
 
 def normalize_date_string(date_string):
@@ -57,11 +72,12 @@ def normalize_date_string_vbulletin_format(vbulletin_date, hour_minutes):
     :return: format = aaaa-mm-dd - hh:mm
     """
     if vbulletin_date[0] == 'H':
-        return f"{datetime.date.today().strftime('%Y-%m-%d')} - {hour_minutes}"
+        return f'{datetime.date.today().strftime("%Y-%m-%d")} - {hour_minutes}'
     if vbulletin_date[0] == 'A':
         yesterday = datetime.date.today() - datetime.timedelta(days=1)
         return f"{yesterday.strftime('%Y-%m-%d')} - {hour_minutes}"
     month_num = month_replacement_number[vbulletin_date[3:6]]
     return datetime.datetime.strptime(
-        f"{vbulletin_date.replace(vbulletin_date[3:6], month_num)} - {hour_minutes}", '%d-%m-%Y - %H:%M'
+        f'{vbulletin_date.replace(vbulletin_date[3:6], month_num)} - {hour_minutes}',
+        '%d-%m-%Y - %H:%M'
     ).strftime('%Y-%m-%d - %H:%M')
