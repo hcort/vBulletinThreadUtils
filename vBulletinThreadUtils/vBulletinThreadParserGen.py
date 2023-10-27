@@ -290,10 +290,10 @@ def _search_and_parse_messages(thread_info, soup, filter_obj, current_url, post_
     all_dates = soup.select('table[class^=tborder] td.thead:nth-child(1)')
     all_user_info = soup.select('table[id^=post] > tr:nth-child(2) > td:nth-child(1)')
     try:
-        for idx, msg, post_date, user_info in list(zip(all_message_indexes,
+        for idx, msg, post_date, user_info in zip(all_message_indexes,
                                                        all_messages,
                                                        all_dates,
-                                                       all_user_info)):
+                                                       all_user_info):
             current_post = {
                 'link': idx.get('href', ''),
                 'index': idx.text,

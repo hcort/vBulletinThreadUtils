@@ -103,11 +103,11 @@ def _parse_page(soup, thread_info, filter_obj, current_url, post_processor):
     all_user_info = soup.select('h4.message-name>a.username')
     all_avatars = soup.select('a.avatar>img')
     try:
-        for idx, msg, post_date, user_info, avatar in list(zip(all_message_indexes,
+        for idx, msg, post_date, user_info, avatar in zip(all_message_indexes,
                                                                all_messages,
                                                                all_dates,
                                                                all_user_info,
-                                                               all_avatars)):
+                                                               all_avatars):
 
             message_as_dict = {
                 'author': {
