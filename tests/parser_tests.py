@@ -37,17 +37,10 @@ import pickle
 
 from tqdm import tqdm
 
-from vBulletinThreadUtils import vBulletinSearch
-from vBulletinThreadUtils.MessageFilter import MessageFilterByAuthor
-from vBulletinThreadUtils.MessageProcessor import MessageHTMLToBBCode, MessageHTMLToText, MessageHTMLToPlainText, \
-    MessageHTMLToHTMLFile
-from vBulletinThreadUtils.ProgressVisor import ProgressVisor
-from vBulletinThreadUtils.vBulletinFileUtils import save_parse_result_as_file
-from vBulletinThreadUtils.vBulletinSession import vbulletin_session
-from vBulletinThreadUtils.vBulletinThreadParserGen import parse_thread, thread_id_to_thread_link_dict
+from src import vBulletinThreadUtils
 
 
-class ProgressVisorTQDM(ProgressVisor):
+class ProgressVisorTQDM(vBulletinThreadUtils.ProgressVisor):
     """
         Uses the TQDM package as a progress visor
     """
@@ -60,12 +53,16 @@ class ProgressVisorTQDM(ProgressVisor):
         return self.total_iterations
 
     @property
+    def initial(self):
+        return self.__tqdm_progress.initial
+
+    @initial.setter
     def initial(self, ini):
         self.__tqdm_progress.initial = ini
 
     @total.setter
     def total(self, total_iterations):
-        super().__init__(total_iterations)
+        super().__init__()
         self.__tqdm_progress.total = total_iterations
 
     def update(self, n=1):
@@ -89,12 +86,13 @@ def simple_thread_parsing():
         We use the save_to_index=False to tell the method not to create or update the
         index file.
     """
-    thread_info = thread_id_to_thread_link_dict('9323203')
+    thread_info = vBulletinThreadUtils.thread_id_to_thread_link_dict('9323203')
     progress_bar = ProgressVisorTQDM(thread_info['url'])
-    if not vbulletin_session.output_dir:
-        vbulletin_session.output_dir = './output/'
-    processor = MessageHTMLToHTMLFile()
-    parse_thread(thread_info=thread_info, filter_obj=None, progress=progress_bar, post_processor=processor)
+    if not vBulletinThreadUtils.vbulletin_session.output_dir:
+        vBulletinThreadUtils.vbulletin_session.output_dir = '../output/'
+    processor = vBulletinThreadUtils.MessageHTMLToHTMLFile()
+    vBulletinThreadUtils.parse_thread(
+        thread_info=thread_info, filter_obj=None, progress=progress_bar, post_processor=processor)
     # save_parse_result_as_file(thread_info=thread_info, save_to_index=False)
 
 
@@ -111,13 +109,13 @@ def simple_thread_parsing_with_index_file():
         file under output_dir/saved_threads.html
     """
     thread_list = [
-        thread_id_to_thread_link_dict('8728235'),
+        vBulletinThreadUtils.thread_id_to_thread_link_dict('8728235'),
     ]
-    if not vbulletin_session.output_dir:
-        vbulletin_session.output_dir = './output/'
+    if not vBulletinThreadUtils.vbulletin_session.output_dir:
+        vBulletinThreadUtils.vbulletin_session.output_dir = '../output/'
     for item in thread_list:
-        parse_thread(thread_info=item, filter_obj=None)
-        save_parse_result_as_file(thread_info=item, save_to_index=True, thread_index_file='')
+        vBulletinThreadUtils.parse_thread(thread_info=item, filter_obj=None)
+        vBulletinThreadUtils.save_parse_result_as_file(thread_info=item, save_to_index=True, thread_index_file='')
 
 
 def thread_parsing_with_filter_by_post_author():
@@ -129,12 +127,12 @@ def thread_parsing_with_filter_by_post_author():
 
         The filter object is a simple filter by post author
     """
-    thread_info = thread_id_to_thread_link_dict('9036759')
-    filter_obj = MessageFilterByAuthor('...')
-    parse_thread(thread_info=thread_info, filter_obj=filter_obj)
-    if not vbulletin_session.output_dir:
-        vbulletin_session.output_dir = './output/'
-    save_parse_result_as_file(thread_info=thread_info, save_to_index=False)
+    thread_info = vBulletinThreadUtils.thread_id_to_thread_link_dict('9036759')
+    filter_obj = vBulletinThreadUtils.MessageFilterByAuthor('...')
+    vBulletinThreadUtils.parse_thread(thread_info=thread_info, filter_obj=filter_obj)
+    if not vBulletinThreadUtils.vbulletin_session.output_dir:
+        vBulletinThreadUtils.vbulletin_session.output_dir = '../output/'
+    vBulletinThreadUtils.save_parse_result_as_file(thread_info=thread_info, save_to_index=False)
 
 
 def thread_parsing_convert_messages_to_BBCode():  # pylint: disable=invalid-name
@@ -149,9 +147,9 @@ def thread_parsing_convert_messages_to_BBCode():  # pylint: disable=invalid-name
 
         In this test we will convert each message to its original BBCode
     """
-    thread_info = thread_id_to_thread_link_dict('9036759')
-    message_processor = MessageHTMLToBBCode()
-    parse_thread(thread_info=thread_info, filter_obj=None, post_processor=message_processor)
+    thread_info = vBulletinThreadUtils.thread_id_to_thread_link_dict('9036759')
+    message_processor = vBulletinThreadUtils.MessageHTMLToBBCode()
+    vBulletinThreadUtils.parse_thread(thread_info=thread_info, filter_obj=None, post_processor=message_processor)
     for idx, post_id in enumerate(thread_info['parsed_messages']):
         print(
             f'Post #{thread_info["parsed_messages"][post_id]["index"]} - '
@@ -175,39 +173,46 @@ def thread_search_and_parse_convert_messages_to_plain_text():
 
         In this test we will convert each message to its original BBCode
     """
-    vbulletin_session.search_words = 'viviendas'
-    vbulletin_session.subforum_id = '23'
-    vbulletin_session.minimum_posts = '1000'
-    vbulletin_session.output_dir = './output/oraculo/'
-    if not os.path.exists(os.path.join(vbulletin_session.output_dir, 'search.pickle')):
-        link_list = vBulletinSearch.search_selenium(
-            driver=vbulletin_session.driver,
+    vBulletinThreadUtils.vbulletin_session.search_words = 'viviendas'
+    vBulletinThreadUtils.vbulletin_session.subforum_id = '23'
+    vBulletinThreadUtils.vbulletin_session.minimum_posts = '1000'
+    vBulletinThreadUtils.vbulletin_session.output_dir = '../output/oraculo/'
+    pickle_name = os.path.join(vBulletinThreadUtils.vbulletin_session.output_dir, 'search.pickle')
+    if not os.path.exists(os.path.join(vBulletinThreadUtils.vbulletin_session.output_dir, 'search.pickle')):
+        link_list = vBulletinThreadUtils.vBulletinSearch.search_selenium(
+            driver=vBulletinThreadUtils.vbulletin_session.driver,
             search_query='viviendas',
             reply_number='1000',
             subforum='23')
-        with open(os.path.join(vbulletin_session.output_dir, 'search.pickle'), 'wb') as file:
+        with open(pickle_name, 'wb') as file:
             pickle.dump(link_list, file)
     else:
-        with open(os.path.join(vbulletin_session.output_dir, 'search.pickle'), 'rb') as file:
+        with open(pickle_name, 'rb') as file:
             link_list = pickle.load(file)
-    message_processor = MessageHTMLToPlainText()
-    filter_obj = MessageFilterByAuthor('...')
+    message_processor = vBulletinThreadUtils.MessageHTMLToPlainText()
+    filter_obj = vBulletinThreadUtils.MessageFilterByAuthor('...')
     for thread in link_list['links']:
-        thread_info = thread_id_to_thread_link_dict(thread['id'])
-        json_file = os.path.join(vbulletin_session.output_dir, f'{thread_info["id"]}.json')
+        thread_info = vBulletinThreadUtils.thread_id_to_thread_link_dict(thread['id'])
+        json_file = os.path.join(vBulletinThreadUtils.vbulletin_session.output_dir, f'{thread_info["id"]}.json')
         if not os.path.exists(json_file):
-            parse_thread(thread_info=thread_info, filter_obj=filter_obj, post_processor=message_processor)
+            vBulletinThreadUtils.parse_thread(
+                thread_info=thread_info,
+                filter_obj=filter_obj,
+                post_processor=message_processor)
             with open(json_file, 'w', encoding='utf-8') as json_file:
                 json.dump(thread_info, json_file)
 
 
 def thread_parsing_convert_messages_to_plain_text():
-    thread_info = thread_id_to_thread_link_dict('8865750')
-    message_processor = MessageHTMLToPlainText()
-    filter_obj = MessageFilterByAuthor('...')
-    vbulletin_session.output_dir = './output/plain_text/'
-    parse_thread(thread_info=thread_info, filter_obj=filter_obj, post_processor=message_processor)
-    with open(os.path.join(vbulletin_session.output_dir,
+    thread_info = vBulletinThreadUtils.thread_id_to_thread_link_dict('8865750')
+    message_processor = vBulletinThreadUtils.MessageHTMLToPlainText()
+    filter_obj = vBulletinThreadUtils.MessageFilterByAuthor('...')
+    vBulletinThreadUtils.vbulletin_session.output_dir = './output/plain_text/'
+    vBulletinThreadUtils.parse_thread(
+        thread_info=thread_info,
+        filter_obj=filter_obj,
+        post_processor=message_processor)
+    with open(os.path.join(vBulletinThreadUtils.vbulletin_session.output_dir,
                            f'{thread_info["id"]}.json'), 'w', encoding='utf-8') as json_file:
         json.dump(thread_info, json_file)
 
@@ -218,23 +223,30 @@ def thread_parsing_save_to_json_file():
         output similar to the parsed thread.
     """
     thread_ids = ['9580321', '9470612', '9605789', '9402444']
-    thread_list = [thread_id_to_thread_link_dict(thread_id) for thread_id in thread_ids]
-    if not vbulletin_session.output_dir:
-        vbulletin_session.output_dir = './output/'
+    thread_list = [vBulletinThreadUtils.thread_id_to_thread_link_dict(thread_id) for thread_id in thread_ids]
+    if not vBulletinThreadUtils.vbulletin_session.output_dir:
+        vBulletinThreadUtils.vbulletin_session.output_dir = '../output/'
     for item in thread_list:
         progress_bar = ProgressVisorTQDM(item['url'])
-        parse_thread(thread_info=item, filter_obj=None, post_processor=MessageHTMLToText(), progress=progress_bar)
-        with open(os.path.join(vbulletin_session.output_dir, f'{item["id"]}.json'), 'w', encoding='utf-8') as json_file:
+        vBulletinThreadUtils.parse_thread(
+            thread_info=item,
+            filter_obj=None,
+            post_processor=vBulletinThreadUtils.MessageHTMLToText(),
+            progress=progress_bar)
+        with open(os.path.join(
+                vBulletinThreadUtils.vbulletin_session.output_dir, f'{item["id"]}.json'),
+                'w',
+                encoding='utf-8') as json_file:
             json.dump(item, json_file)
 
 
 def main():
-    # from vBulletinThreadUtils.vBulletinLoginSelenium import test_driver
+    # from .vBulletinThreadUtils.vBulletinLoginSelenium import test_driver
     # test_driver()
     # create_list_and_delete()
     # simple_thread_parsing()
     # thread_info = thread_id_to_thread_link_dict('9323203')
-    # from vBulletinThreadUtils.vBulletinThreadParserGen import peek_thread_metadata
+    # from .vBulletinThreadUtils.vBulletinThreadParserGen import peek_thread_metadata
     # peek_thread_metadata(thread_info)
     # simple_thread_parsing_with_index_file()
     # thread_parsing_convert_messages_to_BBCode()

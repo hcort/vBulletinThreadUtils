@@ -14,12 +14,13 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.select import Select
 from selenium.webdriver.support.ui import WebDriverWait
 
-from vBulletinThreadUtils.vBulletinSession import vbulletin_session
-from vBulletinThreadUtils.vBulletinThreadParserGen import peek_thread_metadata, normalize_date_string_vbulletin_format
-from vBulletinThreadUtils.vBulletinThreadPostersInfo import get_posters_from_thread
+from .vBulletinSession import vbulletin_session
+from .vBulletinThreadParserGen import peek_thread_metadata
+from .vBulletinThreadPostersInfo import get_posters_from_thread
+from .utils import normalize_date_string_vbulletin_format
 
 
-def find_next(soup):
+def _find_next(soup):
     next_link = soup.find('a', {'rel': 'next'})
     return vbulletin_session.base_url + next_link.get('href', '') if next_link else ''
 
@@ -28,7 +29,7 @@ re_author_from_link = re.compile(r'member.php\?u=(\d+)')
 re_thread_id_from_link = re.compile(r'thread_title_(\d+)')
 
 
-def get_links(soup, search_query='', strict_search=False):
+def _get_links(soup, search_query='', strict_search=False):
     links = []
     all_threads_table = soup.select('td[id^="td_threadtitle_"] > div > a[id^="thread_title_"]')
     all_threads_authors = soup.select('td[id^="td_threadtitle_"] > div.smallfont')
@@ -59,13 +60,13 @@ def get_links(soup, search_query='', strict_search=False):
     return links
 
 
-def get_search_id(driver):
+def _get_search_id(driver):
     regex_thread_id = re.compile(r'searchid=(\d+)')
     search_id = regex_thread_id.search(driver.current_url)
     return search_id.group(1) if search_id else ''
 
 
-def loop_search_results(driver, start_url, search_query, strict_search):
+def _loop_search_results(driver, start_url, search_query, strict_search):
     timeout = 50
     current_url = start_url
     first_search = True
@@ -74,7 +75,7 @@ def loop_search_results(driver, start_url, search_query, strict_search):
         if first_search:
             source = driver.page_source
             search_soup = BeautifulSoup(source, features='html.parser')
-            search_result['search_id'] = get_search_id(driver)
+            search_result['search_id'] = _get_search_id(driver)
             first_search = False
         else:
             driver.get(current_url)
@@ -83,21 +84,21 @@ def loop_search_results(driver, start_url, search_query, strict_search):
             source = driver.page_source
             search_soup = BeautifulSoup(source, features='html.parser')
         if search_soup:
-            search_result['links'] += get_links(soup=search_soup,
-                                                search_query=search_query, strict_search=strict_search)
-            current_url = find_next(search_soup)
+            search_result['links'] += _get_links(soup=search_soup,
+                                                 search_query=search_query, strict_search=strict_search)
+            current_url = _find_next(search_soup)
     return search_result
 
 
-def fill_search_form_all_parameters(driver,
-                                    keyword: str = '',
-                                    search_in_title: bool = False,
-                                    author: str = '', threads_started_by_user: bool = False,
-                                    reply_number: str = '', max_messages: bool = False,
-                                    time_limit: str = '365', older_than: bool = True,
-                                    order_type: str = 'lastpost', ascending: bool = True,
-                                    show_as_messages: bool = True,
-                                    subforum: str = '23') -> bool:
+def _fill_search_form_all_parameters(driver,
+                                     keyword: str = '',
+                                     search_in_title: bool = False,
+                                     author: str = '', threads_started_by_user: bool = False,
+                                     reply_number: str = '', max_messages: bool = False,
+                                     time_limit: str = '365', older_than: bool = True,
+                                     order_type: str = 'lastpost', ascending: bool = True,
+                                     show_as_messages: bool = True,
+                                     subforum: str = '23') -> bool:
     """
     :param max_messages:
     :param reply_number:
@@ -182,7 +183,7 @@ def fill_search_form_all_parameters(driver,
     return thread_list_present
 
 
-def import_cookies_from_session(driver):
+def _import_cookies_from_session(driver):
     """
         This is the opposite method of vBulletinLoginSelenium.hijack_cookies
     """
@@ -209,21 +210,21 @@ def search_selenium(driver=None,
     # driver = webdriver.Firefox()
     search_result = None
     try:
-        # import_cookies_from_session(driver)
+        # _import_cookies_from_session(driver)
         driver.get(search_url)
         # click_cookies_button(driver)
-        if fill_search_form_all_parameters(driver,
-                                           keyword=search_query, search_in_title=search_in_title,
-                                           author=author, threads_started_by_user=threads_started_by_user,
-                                           reply_number=reply_number, max_messages=max_messages,
-                                           time_limit=time_limit, older_than=older_than,
-                                           order_type=order_type, ascending=ascending,
-                                           show_as_messages=show_as_messages,
-                                           subforum=subforum):
-            search_result = loop_search_results(driver,
-                                                start_url=search_url,
-                                                search_query=search_query,
-                                                strict_search=strict_search)
+        if _fill_search_form_all_parameters(driver,
+                                            keyword=search_query, search_in_title=search_in_title,
+                                            author=author, threads_started_by_user=threads_started_by_user,
+                                            reply_number=reply_number, max_messages=max_messages,
+                                            time_limit=time_limit, older_than=older_than,
+                                            order_type=order_type, ascending=ascending,
+                                            show_as_messages=show_as_messages,
+                                            subforum=subforum):
+            search_result = _loop_search_results(driver,
+                                                 start_url=search_url,
+                                                 search_query=search_query,
+                                                 strict_search=strict_search)
     except TimeoutException as ex:
         print(f'Error accessing {search_url}: Timeout: {str(ex)}')
     except Exception as ex:
@@ -244,7 +245,7 @@ def search_with_posters_metadata(driver=None,
                                  show_as_messages: bool = True,
                                  subforum: str = '23'):
     """
-        see fill_search_form_all_parameters for the description of parameters
+        see _fill_search_form_all_parameters for the description of parameters
     """
     if not driver:
         driver = vbulletin_session.driver

@@ -8,7 +8,7 @@ from time import altzone
 import requests
 from bs4 import BeautifulSoup
 
-from vBulletinThreadUtils.vBulletinSession import vbulletin_session
+from .vBulletinSession import vbulletin_session
 
 
 def get_soup_requests(requests_session: requests.Session = None, url: str = None) -> BeautifulSoup | None:

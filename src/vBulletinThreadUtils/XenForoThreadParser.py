@@ -12,9 +12,9 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.wait import WebDriverWait
 
-from vBulletinThreadUtils import MessageFilter, MessageProcessor, ProgressVisor, vBulletinSession
-from vBulletinThreadUtils.utils import get_attribute_from_soup_find, get_string_from_regex, get_soup_requests
-from vBulletinThreadUtils.vBulletinLoginSelenium import hijack_cookies, create_driver_and_login
+from . import vBulletinSession, MessageFilter, MessageProcessor, ProgressVisor
+from .utils import get_attribute_from_soup_find, get_string_from_regex, get_soup_requests
+from .vBulletinLoginSelenium import hijack_cookies, create_driver_and_login
 
 
 def _xenforo_wait_cookies_and_click(driver: WebDriver) -> None:
@@ -85,7 +85,7 @@ regex_thread_id_url = re.compile(r'/threads/(.+)/')
 regex_thread_page_number = re.compile(r'/page-([0-9]+)')
 
 
-def update_progress_bar(progress, soup):
+def _update_progress_bar(progress, soup):
     if progress:
         if not progress.total:
             progress.total = int(soup.select_one('ul.pageNav-main>li.pageNav-page:last-child').text)
@@ -174,7 +174,7 @@ def parse_thread_xenforo(session: requests.Session,
         soup = get_soup_requests(session, full_url)
         if not soup:
             print(f'Error getting {current_url}')
-        update_progress_bar(progress, soup)
+        _update_progress_bar(progress, soup)
         _initialize_thread_info(thread_info, soup)
         _parse_page(soup, thread_info, filter_obj, current_url, post_processor)
         thread_info['last_page'] = current_url

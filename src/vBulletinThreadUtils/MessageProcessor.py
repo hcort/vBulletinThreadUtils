@@ -9,8 +9,8 @@
 """
 from bs4 import Tag
 
-from vBulletinThreadUtils.html2bbcode import parse_children_in_node
-from vBulletinThreadUtils.vBulletinFileUtils import close_thread_file, open_thread_file, get_thread_file_name, \
+from .html2bbcode import parse_children_in_node
+from .vBulletinFileUtils import close_thread_file, open_thread_file, get_thread_file_name, \
     write_message_to_thread_file
 
 
@@ -36,19 +36,6 @@ class MessageHTMLToText(MessageProcessor):
     """
 
     def process_message(self, thread_info: dict, post_id: str, message: Tag):
-        return message.prettify(formatter='minimal')
-
-
-class MessageHTMLToTextAddingBorderToBlockquote(MessageProcessor):
-    """
-        This processor takes a message in XenForo format and adds a thin line
-        around the blockquote sections via inline css style
-    """
-
-    def process_message(self, thread_info: dict, post_id: str, message: Tag):
-        blockquotes = message.find_all('blockquote')
-        for blockquote in blockquotes:
-            blockquote['style'] = 'border-style: double;'
         return message.prettify(formatter='minimal')
 
 

@@ -8,7 +8,7 @@
 """
 from selenium.webdriver.common.by import By
 
-from vBulletinThreadUtils.vBulletinSession import vbulletin_session
+from .vBulletinSession import vbulletin_session
 
 odd_row_user_css = 'table.tborder>tbody>tr>td.alt1:nth-child(1)'
 odd_row_messages_css = 'table.tborder>tbody>tr>td.alt1:nth-child(2)'

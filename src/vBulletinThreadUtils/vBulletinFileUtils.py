@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 from bs4 import BeautifulSoup, Tag
 from slugify import slugify
 
-from vBulletinThreadUtils.vBulletinSession import vbulletin_session
+from .vBulletinSession import vbulletin_session
 
 
 def save_parse_result_as_file(thread_info, save_to_index=False, thread_index_file=''):

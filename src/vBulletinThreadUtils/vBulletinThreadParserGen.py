@@ -13,13 +13,14 @@ import re
 
 from bs4 import BeautifulSoup, Tag
 
-from vBulletinThreadUtils import MessageFilter, MessageProcessor
-from vBulletinThreadUtils.ProgressVisor import ProgressVisor
-from vBulletinThreadUtils.utils import (get_soup_requests,
-                                        normalize_date_string_vbulletin_format,
-                                        normalize_date_string,
-                                        get_string_from_regex)
-from vBulletinThreadUtils.vBulletinSession import vbulletin_session
+from . import MessageFilter
+from . import MessageProcessor
+from . import ProgressVisor
+from .utils import (get_soup_requests,
+                    normalize_date_string_vbulletin_format,
+                    normalize_date_string,
+                    get_string_from_regex)
+from .vBulletinSession import vbulletin_session
 
 
 def thread_id_to_thread_link_dict(thread_id):
@@ -291,9 +292,9 @@ def _search_and_parse_messages(thread_info, soup, filter_obj, current_url, post_
     all_user_info = soup.select('table[id^=post] > tr:nth-child(2) > td:nth-child(1)')
     try:
         for idx, msg, post_date, user_info in zip(all_message_indexes,
-                                                       all_messages,
-                                                       all_dates,
-                                                       all_user_info):
+                                                  all_messages,
+                                                  all_dates,
+                                                  all_user_info):
             current_post = {
                 'link': idx.get('href', ''),
                 'index': idx.text,

@@ -1,5 +1,5 @@
 # vBulletinThreadUtils
-A collection of utils to extract information from vBulletinForums.
+A collection of utils to extract information from .vBulletinForums.
 
 vBulletinSearch
 Searchs the forum for threads.

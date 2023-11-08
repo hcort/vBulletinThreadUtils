@@ -6,9 +6,7 @@
 import configparser
 import os
 
-from vBulletinThreadUtils.vBulletinLoginSelenium import (create_session_object,
-                                                         create_driver_and_login,
-                                                         hijack_cookies)
+from .vBulletinLoginSelenium import create_session_object, create_driver_and_login, hijack_cookies
 
 
 class VBulletinSession:
@@ -103,8 +101,8 @@ class VBulletinSession:
             'vb_login_password': self.__password}
         # .../foro/misc.php?do=page&template=ident
         # self.__session = VBulletinLogin(self.__base_url + 'misc.php?do=page&template=ident', login_data)
-        self.__driver = create_driver_and_login(login_url=self.__base_url + 'misc.php?do=page&template=ident',
-                                                login_data=login_data)
+        self.__driver = create_driver_and_login(
+            login_url=f'{self.__base_url}misc.php?do=page&template=ident', login_data=login_data)
         self.__session = hijack_cookies(self.__driver)
         cookie_bbimloggedin = self.__session.cookies.get('bbimloggedin', default='no')
         if cookie_bbimloggedin == 'no':
@@ -124,8 +122,8 @@ class VBulletinSession:
                 'vb_login_username': self.__user_name,
                 'vb_login_password': self.__password}
             # .../foro/misc.php?do=page&template=ident
-            self.__driver = create_driver_and_login(login_url=self.__base_url + 'misc.php?do=page&template=ident',
-                                                    login_data=login_data)
+            self.__driver = vBulletinLoginSelenium.create_driver_and_login(
+                login_url=f'{self.__base_url}misc.php?do=page&template=ident', login_data=login_data)
         return self.__driver
 
 
